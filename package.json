@@ -1,0 +1,34 @@
+{
+  "name": "@silyze/browsary-pipeline",
+  "version": "1.0.0",
+  "description": "The pipeline core library for Browsary",
+  "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
+  "keywords": [],
+  "author": "Mihail Mojsoski",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "puppeteer-core": "^24.10.0",
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "watch": "npx tsc --watch",
+    "build": "npx tsc",
+    "prepare": "npm run build",
+    "version": "git add -A lib",
+    "postversion": "git push && git push --tags",
+    "start": "node dist/example.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@mojsoski/assert": "^1.0.0",
+    "@silyze/browser-provider": "^1.0.0",
+    "@silyze/html-prompt-utils": "^1.0.0",
+    "@silyze/logger": "^1.0.1",
+    "ajv": "^8.17.1"
+  }
+}
