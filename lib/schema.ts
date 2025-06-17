@@ -232,7 +232,7 @@ const type = nodeSchema({
     { name: "page", type: null, refType: "page" },
     { name: "selector", type: stringInputType, refType: "string" },
     { name: "text", type: stringInputType, refType: "string" },
-    { name: "delayMs", type: integerInputType, refType: "number" },
+    { name: "delayMs", type: integerInputType, refType: "integer" },
   ],
   outputs: [],
 });

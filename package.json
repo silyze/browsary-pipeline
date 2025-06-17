@@ -1,6 +1,6 @@
 {
   "name": "@silyze/browsary-pipeline",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "The pipeline core library for Browsary",
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
