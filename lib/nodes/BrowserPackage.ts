@@ -1,6 +1,6 @@
 import { assert } from "@mojsoski/assert";
 import { EvaluationPackage, PackageConfig, PackageName } from "../library";
-import { Browser } from "puppeteer-core";
+import type { Browser } from "puppeteer-core";
 import { EvaluationNode } from "../evaluation";
 
 export default class BrowserPackage extends EvaluationPackage<"browser"> {
@@ -21,21 +21,15 @@ export default class BrowserPackage extends EvaluationPackage<"browser"> {
   };
 
   close: EvaluationNode = async ({ browser }) => {
-    assert(
-      browser instanceof Browser,
-      `The "browser" input parameter is not an instance of the Browser class`
-    );
-    await browser.close();
+    assert(browser, `The "browser" input parameter is null or undefined`);
+    await (browser as Browser).close();
     return {};
   };
 
   createPage: EvaluationNode = async ({ browser }, { gc }) => {
-    assert(
-      browser instanceof Browser,
-      `The "browser" input parameter is not an instance of the Browser class`
-    );
+    assert(browser, `The "browser" input parameter is null or undefined`);
 
-    const page = await browser.newPage();
+    const page = await (browser as Browser).newPage();
 
     const viewport = this[PackageConfig].viewport;
     if (viewport) {

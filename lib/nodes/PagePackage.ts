@@ -1,7 +1,7 @@
 import { EvaluationPackage, PackageName } from "../library";
 import { EvaluationNode } from "../evaluation";
 import { assert, assertType } from "@mojsoski/assert";
-import { Page } from "puppeteer-core";
+import type { Page } from "puppeteer-core";
 import {
   compressNode,
   HTMLSerializer,
@@ -12,20 +12,14 @@ export default class PagePackage extends EvaluationPackage<"page"> {
   readonly [PackageName] = "page";
 
   close: EvaluationNode = async ({ page }) => {
-    assert(
-      page instanceof Page,
-      `The "page" input parameter is not an instance of the Page class`
-    );
+    assert(page, `The "page" input parameter is null or undefined`);
 
-    await page.close();
+    await (page as Page).close();
     return {};
   };
 
   goto: EvaluationNode = async ({ page, url, waitUntil }) => {
-    assert(
-      page instanceof Page,
-      `The "page" input parameter is not an instance of the Page class`
-    );
+    assert(page, `The "page" input parameter is null or undefined`);
 
     assertType(url, "string", "url");
     assertType(waitUntil, "string", "waitUntil");
@@ -38,59 +32,54 @@ export default class PagePackage extends EvaluationPackage<"page"> {
       `The "waitUntil" input parameter has an invalid value`
     );
 
-    await page.goto(url, { waitUntil });
+    await (page as Page).goto(url, { waitUntil });
 
     return {};
   };
 
   click: EvaluationNode = async ({ page, selector, waitForNavigation }) => {
-    assert(
-      page instanceof Page,
-      `The "page" input parameter is not an instance of the Page class`
-    );
+    assert(page, `The "page" input parameter is null or undefined`);
 
     assertType(selector, "string", "selector");
     assertType(waitForNavigation, "boolean", "waitForNavigation");
 
     if (waitForNavigation) {
-      await Promise.all([page.waitForNavigation(), page.click(selector)]);
+      await Promise.all([
+        (page as Page).waitForNavigation(),
+        (page as Page).click(selector),
+      ]);
     } else {
-      await page.click(selector);
+      await (page as Page).click(selector);
     }
 
     return {};
   };
 
   type: EvaluationNode = async ({ page, selector, text, delayMs }) => {
-    assert(
-      page instanceof Page,
-      `The "page" input parameter is not an instance of the Page class`
-    );
+    assert(page, `The "page" input parameter is null or undefined`);
+
     assertType(selector, "string", "selector");
     assertType(text, "string", "text");
     assertType(delayMs, "number", "delayMs");
 
-    await page.type(selector, text, { delay: delayMs });
+    await (page as Page).type(selector, text, { delay: delayMs });
 
     return {};
   };
 
   display: EvaluationNode = async ({ page, selector }, { logger }) => {
-    assert(
-      page instanceof Page,
-      `The "page" input parameter is not an instance of the Page class`
-    );
+    assert(page, `The "page" input parameter is null or undefined`);
 
     assertType(selector, "string", "selector");
 
-    const html = await page.$$eval(selector, (els) =>
+    const html = await (page as Page).$$eval(selector, (els) =>
       els.map((el) => el.outerHTML).join("")
     );
 
     const root = await HTMLSerializer.parse(new HTMLTextStream(html));
     const compressedNode = compressNode(root) ?? {};
 
-    logger.log("info", "display", page.url(), compressedNode);
+    logger.log("info", "display", (page as Page).url(), compressedNode);
 
     return {};
   };
