@@ -13,10 +13,10 @@ import {
   waitForPipelineThread,
 } from "./evaluation";
 import {
+  createLibrary,
   EvaluationPackage,
   IEvaluationPackage,
   PackageName,
-  createLibrary,
 } from "./library";
 import { StandardLibraryProvider } from "./nodes";
 import {
@@ -28,13 +28,13 @@ import {
 import {
   booleanInputType,
   genericNodeSchema,
-  integerInputType,
+  numberType,
   PipelineSchema,
   pipelineSchema,
   RefType,
   stringInputType,
-  waitEventType,
   typeDescriptor,
+  waitEventType,
 } from "./schema";
 
 export {
@@ -53,7 +53,7 @@ export {
   RefType,
   stringInputType,
   booleanInputType,
-  integerInputType,
+  numberType,
   waitEventType,
   typeDescriptor,
 };

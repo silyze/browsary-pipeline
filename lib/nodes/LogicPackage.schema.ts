@@ -1,4 +1,9 @@
-import {booleanInputType, nodeSchema, numberType, RefType} from "../schema-base";
+import {
+  booleanInputType,
+  nodeSchema,
+  numberType,
+  RefType,
+} from "../schema-base";
 
 const add = nodeSchema({
   prefix: "logic",
@@ -6,10 +11,10 @@ const add = nodeSchema({
   title: "Add",
   description: "Add two numbers",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const subtract = nodeSchema({
@@ -18,10 +23,10 @@ const subtract = nodeSchema({
   title: "Subtract",
   description: "Subtract one number from another",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const multiply = nodeSchema({
@@ -30,10 +35,10 @@ const multiply = nodeSchema({
   title: "Multiply",
   description: "Multiply two numbers",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const divide = nodeSchema({
@@ -42,10 +47,10 @@ const divide = nodeSchema({
   title: "Divide",
   description: "Divide one number by another",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const modulus = nodeSchema({
@@ -54,10 +59,10 @@ const modulus = nodeSchema({
   title: "Modulus",
   description: "Remainder of division",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const power = nodeSchema({
@@ -66,10 +71,10 @@ const power = nodeSchema({
   title: "Power",
   description: "Raise a number to the power of another",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const negate = nodeSchema({
@@ -77,8 +82,8 @@ const negate = nodeSchema({
   action: "negate",
   title: "Negate",
   description: "Negate a number",
-  inputs: [{name: "a", type: numberType, refType: "number"}],
-  outputs: [{name: "result", refType: "number"}]
+  inputs: [{ name: "a", type: numberType, refType: "number" }],
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const bitwiseAnd = nodeSchema({
@@ -87,10 +92,10 @@ const bitwiseAnd = nodeSchema({
   title: "Bitwise AND",
   description: "Bitwise AND between two numbers",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const bitwiseOr = nodeSchema({
@@ -99,10 +104,10 @@ const bitwiseOr = nodeSchema({
   title: "Bitwise OR",
   description: "Bitwise OR between two numbers",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const bitwiseXor = nodeSchema({
@@ -111,10 +116,10 @@ const bitwiseXor = nodeSchema({
   title: "Bitwise XOR",
   description: "Bitwise XOR between two numbers",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const bitwiseNot = nodeSchema({
@@ -122,8 +127,8 @@ const bitwiseNot = nodeSchema({
   action: "bitwiseNot",
   title: "Bitwise NOT",
   description: "Bitwise NOT of a number",
-  inputs: [{name: "a", type: numberType, refType: "number"}],
-  outputs: [{name: "result", refType: "number"}]
+  inputs: [{ name: "a", type: numberType, refType: "number" }],
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const leftShift = nodeSchema({
@@ -132,10 +137,10 @@ const leftShift = nodeSchema({
   title: "Left Shift",
   description: "Left shift a number",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const rightShift = nodeSchema({
@@ -144,10 +149,10 @@ const rightShift = nodeSchema({
   title: "Right Shift",
   description: "Right shift a number",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const unsignedRightShift = nodeSchema({
@@ -156,10 +161,10 @@ const unsignedRightShift = nodeSchema({
   title: "Unsigned Right Shift",
   description: "Unsigned right shift a number",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "number"}]
+  outputs: [{ name: "result", refType: "number" }],
 });
 
 const equal = nodeSchema({
@@ -168,10 +173,10 @@ const equal = nodeSchema({
   title: "Equal",
   description: "Check if two values are equal",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const notEqual = nodeSchema({
@@ -180,10 +185,10 @@ const notEqual = nodeSchema({
   title: "Not Equal",
   description: "Check if two values are not equal",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const greaterThan = nodeSchema({
@@ -192,10 +197,10 @@ const greaterThan = nodeSchema({
   title: "Greater Than",
   description: "Check if a > b",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const greaterThanOrEqual = nodeSchema({
@@ -204,10 +209,10 @@ const greaterThanOrEqual = nodeSchema({
   title: "Greater Than Or Equal",
   description: "Check if a >= b",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const lessThan = nodeSchema({
@@ -216,10 +221,10 @@ const lessThan = nodeSchema({
   title: "Less Than",
   description: "Check if a < b",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const lessThanOrEqual = nodeSchema({
@@ -228,10 +233,10 @@ const lessThanOrEqual = nodeSchema({
   title: "Less Than Or Equal",
   description: "Check if a <= b",
   inputs: [
-    {name: "a", type: numberType, refType: "number"},
-    {name: "b", type: numberType, refType: "number"}
+    { name: "a", type: numberType, refType: "number" },
+    { name: "b", type: numberType, refType: "number" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const and = nodeSchema({
@@ -240,10 +245,10 @@ const and = nodeSchema({
   title: "Logical AND",
   description: "Logical AND between two values",
   inputs: [
-    {name: "a", type: booleanInputType, refType: "boolean"},
-    {name: "b", type: booleanInputType, refType: "boolean"}
+    { name: "a", type: booleanInputType, refType: "boolean" },
+    { name: "b", type: booleanInputType, refType: "boolean" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const or = nodeSchema({
@@ -252,10 +257,10 @@ const or = nodeSchema({
   title: "Logical OR",
   description: "Logical OR between two values",
   inputs: [
-    {name: "a", type: booleanInputType, refType: "boolean"},
-    {name: "b", type: booleanInputType, refType: "boolean"}
+    { name: "a", type: booleanInputType, refType: "boolean" },
+    { name: "b", type: booleanInputType, refType: "boolean" },
   ],
-  outputs: [{name: "result", refType: "boolean"}]
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
 const not = nodeSchema({
@@ -263,14 +268,13 @@ const not = nodeSchema({
   action: "not",
   title: "Logical NOT",
   description: "Logical NOT of a value",
-  inputs: [
-    {name: "a", type: booleanInputType, refType: "boolean"}
-  ],
-  outputs: [{name: "result", refType: "boolean"}]
+  inputs: [{ name: "a", type: booleanInputType, refType: "boolean" }],
+  outputs: [{ name: "result", refType: "boolean" }],
 });
 
+export type { RefType };
 
-const nodes = [
+export default [
   add,
   subtract,
   multiply,
@@ -298,7 +302,3 @@ const nodes = [
   or,
   not,
 ];
-
-export type {RefType}
-
-export default nodes

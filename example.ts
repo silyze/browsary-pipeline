@@ -1,51 +1,60 @@
 import { createJsonLogger } from "@silyze/logger";
 import {
+  GenericNode,
   hasPipeline,
   PipelineCompiler,
   StandardLibraryProvider,
   waitForPipelineThread,
 } from "./lib";
-import { UrlBrowserProvider } from "@silyze/browser-provider";
-
-const pipelineSource = {
-  create_browser: {
-    node: "browser::create",
-    inputs: {},
-    outputs: {
-      browser: "browser",
-    },
+import { NullBrowserProvider } from "@silyze/browser-provider";
+const pipelineSource: Record<string, GenericNode> = {
+  counter: {
     dependsOn: [],
-  },
-  create_page: {
-    node: "browser::createPage",
+    node: "declare::number",
     inputs: {
-      browser: {
-        type: "outputOf",
-        nodeName: "create_browser",
-        outputName: "browser",
+      value: {
+        type: "constant",
+        value: 10,
       },
+    },
+    outputs: { value: "value" },
+  },
+
+  decrement: {
+    dependsOn: ["counter"],
+    node: "logic::subtract",
+    inputs: {
+      a: { type: "outputOf", nodeName: "counter", outputName: "value" },
+      b: { type: "constant", value: 1 },
     },
     outputs: {
-      page: "page",
+      result: { nodeName: "counter", inputName: "value" },
     },
-    dependsOn: "create_browser",
   },
-  goto_target_page: {
-    node: "page::goto",
-    dependsOn: "create_page",
+
+  check: {
+    dependsOn: ["decrement"],
+    node: "logic::greaterThanOrEqual",
     inputs: {
-      page: {
+      a: {
         type: "outputOf",
-        nodeName: "create_page",
-        outputName: "page",
+        nodeName: "decrement",
+        outputName: "result",
       },
-      url: {
+      b: { type: "constant", value: 0 },
+    },
+    outputs: {
+      result: "result",
+    },
+  },
+
+  loop: {
+    dependsOn: [{ nodeName: "check", outputName: "result" }],
+    node: "log::info",
+    inputs: {
+      value: {
         type: "constant",
-        value: "https://www.google.com",
-      },
-      waitUntil: {
-        type: "constant",
-        value: "load",
+        value: "Test",
       },
     },
     outputs: {},
@@ -56,12 +65,11 @@ async function main() {
   const compiler = new PipelineCompiler();
   const result = compiler.compile(pipelineSource);
   if (hasPipeline(result)) {
-    console.log("Pipeline compiled successfully!");
     const logger = createJsonLogger(console.log);
 
     const evaluation = result.pipeline.createEvaluation({
       logger,
-      browserProvider: new UrlBrowserProvider(),
+      browserProvider: NullBrowserProvider.default,
       libraryProvider: StandardLibraryProvider,
       viewport: {
         height: 600,

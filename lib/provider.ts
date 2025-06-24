@@ -1,7 +1,27 @@
-import type { Pipeline } from "./evaluation";
+import type { Dependency, Pipeline } from "./evaluation";
 import type { PipelineSchema } from "./schema";
 
 export type PipelineCompileError =
+  | {
+      type: "conditional-dependency-invalid-output-ref";
+      message: "Conditional dependency must refer to a direct output (string), not a computed or redirected one";
+      nodeName: string;
+      dependency: {
+        nodeName: string;
+        outputName: string;
+      };
+    }
+  | {
+      type: "unconditional-cycle";
+      message: "Detected a circular dependency with only unconditional links. This creates an infinite loop.";
+      nodeName: string;
+    }
+  | {
+      type: "conditional-dependency-not-boolean";
+      message: "Conditional dependency output must be of type boolean";
+      nodeName: string;
+      dependency: Dependency;
+    }
   | {
       type: "pipeline-not-object";
       message: "The pipeline is not an object";
@@ -37,7 +57,7 @@ export type PipelineCompileError =
       type: "dependency-not-found";
       message: "The node has an invalid dependency";
       nodeName: string;
-      dependency: string;
+      dependency: Dependency;
     }
   | {
       type: "self-dependency";
@@ -88,6 +108,14 @@ export type PipelineCompileError =
       message: "The input cannot be represented as a constant";
     }
   | {
+      type: "const-input-schema-invalid";
+      nodeType: `${string}::${string}`;
+      nodeName: string;
+      inputName: string;
+      value: unknown;
+      message: "The constant input schema is missing or invalid";
+    }
+  | {
       type: "const-input-type-mismatch";
       nodeType: `${string}::${string}`;
       nodeName: string;
@@ -127,6 +155,14 @@ export type PipelineCompileError =
       message: "The output node type referenced by an input was not found";
     }
   | {
+      type: "output-reference-indirect";
+      nodeName: string;
+      inputName: string;
+      referenceNodeName: string;
+      referenceOutputName: string;
+      message: "Cannot typecheck indirect output references (output is not a direct string name)";
+    }
+  | {
       type: "output-reference-type-not-found";
       nodeName: string;
       inputName: string;
@@ -160,6 +196,22 @@ export type PipelineCompileError =
       referenceNodeName: string;
       referenceOutputName: string;
       message: "The referenced output's node is not a dependency to the input's node";
+    }
+  | {
+      type: "output-reference-resolution-failed";
+      nodeName: string;
+      referenceNodeName: string;
+      inputName: string;
+      referenceOutputName: string;
+      message: "Could not resolve indirect output reference to a concrete output name";
+    }
+  | {
+      type: "output-reference-node-type-not-found";
+      nodeName: string;
+      referenceNodeName: string;
+      inputName: string;
+      referenceOutputName: string;
+      message: "The node schema for the resolved output was not found";
     };
 
 export type PipelineCompileResult =

@@ -1,29 +1,31 @@
 import Ajv from "ajv";
-import { assertType, assert } from "@mojsoski/assert";
+import { assert, assertType } from "@mojsoski/assert";
 import {
   pipelineSchema,
-  RefType,
   PipelineSchema,
+  RefType,
   typeDescriptor,
 } from "./schema";
 import {
+  Dependency,
+  GenericNode,
+  InputNode,
   Pipeline,
   PipelineTreeNode,
-  InputNode,
-  GenericNode,
 } from "./evaluation";
 import {
   PipelineCompileError,
   PipelineCompileResult,
   PipelineProvider,
 } from "./provider";
+
 const ajv = new Ajv();
 
 type AfterParseCheck =
   | {
       type: "depends-on";
       nodeName: string;
-      dependsOn: string | string[];
+      dependsOn: Dependency | Dependency[];
     }
   | {
       type: "node";
@@ -34,6 +36,7 @@ type AfterParseCheck =
       type: "input-ref";
       nodeName: string;
       input: {
+        kind: "outputOf";
         ref: {
           nodeName: string;
           outputName: string;
@@ -59,6 +62,24 @@ type AfterParseCheck =
       };
     };
 
+function isValidDependency(
+  dep: unknown
+): dep is string | { nodeName: string; outputName: string } {
+  return (
+    typeof dep === "string" ||
+    (typeof dep === "object" &&
+      dep !== null &&
+      typeof (dep as any).nodeName === "string" &&
+      typeof (dep as any).outputName === "string")
+  );
+}
+
+function isValidDependencyList(
+  dep: unknown
+): dep is (string | { nodeName: string; outputName: string })[] {
+  return Array.isArray(dep) && dep.every(isValidDependency);
+}
+
 const propertiesToCheck = ["node", "inputs", "outputs", "dependsOn"] as const;
 const propertyTypes = {
   node: "string",
@@ -74,15 +95,32 @@ function dfs(visited: Set<string>, node: PipelineTreeNode) {
   }
 }
 
-function isDescendantByRef(
-  root?: PipelineTreeNode,
-  target?: PipelineTreeNode
+function detectUnconditionalCycle(
+  node: PipelineTreeNode,
+  visited = new Set<string>(),
+  stack = new Set<string>()
 ): boolean {
-  if (root === undefined || target === undefined) return false;
-  for (const child of root.children) {
-    if (child === target) return true;
-    if (isDescendantByRef(child, target)) return true;
+  if (!visited.has(node.name)) {
+    visited.add(node.name);
+    stack.add(node.name);
+
+    for (const dep of node.dependsOn) {
+      if (typeof dep !== "string") continue;
+
+      const child = node.children.find((c) => c.name === dep);
+      if (child) {
+        if (
+          !visited.has(child.name) &&
+          detectUnconditionalCycle(child, visited, stack)
+        ) {
+          return true;
+        } else if (stack.has(child.name)) {
+          return true;
+        }
+      }
+    }
   }
+  stack.delete(node.name);
   return false;
 }
 
@@ -110,9 +148,50 @@ function schemaGetNode(node: `${string}::${string}`) {
     (item) => item.properties.node.const === node
   );
 }
+function resolveOutputReference(
+  nodeName: string,
+  outputName: string,
+  pipeline: Record<string, GenericNode>,
+  seen = new Set<string>()
+): { nodeName: string; outputName: string } | undefined {
+  const key = `${nodeName}.${outputName}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  const node = pipeline[nodeName];
+  if (!node) return undefined;
+
+  const output = node.outputs[outputName];
+  if (typeof output === "string") {
+    return { nodeName, outputName: output };
+  }
+
+  if (
+    typeof output === "object" &&
+    output !== null &&
+    "nodeName" in output &&
+    "inputName" in output
+  ) {
+    return resolveOutputReference(
+      output.nodeName,
+      output.inputName,
+      pipeline,
+      seen
+    );
+  }
+
+  return undefined;
+}
 
 function schemaRefType(schema: object) {
-  const ref = schema as { [RefType]: string | undefined };
+  let ref = schema as { [RefType]: string | undefined };
+  if ("anyOf" in ref) {
+    const anyOf = ref.anyOf as (
+      | { type: "string"; [RefType]: string | undefined }
+      | { type: "object" }
+    )[];
+    ref = anyOf.find((item) => item.type === "string")!;
+  }
   assertType(ref[RefType], "string", "RefType");
   return ref[RefType];
 }
@@ -129,18 +208,24 @@ export const nodes = pipelineSchema.additionalProperties.anyOf.map((item) => ({
   description: item.description,
   node: item.properties.node.const,
   inputs: Object.fromEntries(
-    Object.entries(item.properties.inputs.properties).map(([key, value]) => [
-      key,
-      value.properties
-        ? describeType(schemaRefType(value.properties.type))
-        : describeType(
-            schemaRefType(
-              value.anyOf.find(
-                (item) => item.properties.type.const === "outputOf"
-              )!.properties.type
-            )
-          ),
-    ])
+    Object.entries(item.properties.inputs.properties).map(([key, value]) => {
+      if ("properties" in value && value.properties?.type) {
+        return [key, describeType(schemaRefType(value.properties.type))];
+      }
+
+      if ("anyOf" in value) {
+        const refSchema = value.anyOf.find(
+          (v) =>
+            v.properties?.type?.const === "outputOf" ||
+            v.properties?.type?.const === "lazyOutputOf"
+        );
+        if (refSchema?.properties?.type) {
+          return [key, describeType(schemaRefType(refSchema.properties.type))];
+        }
+      }
+
+      return [key, "unknown"];
+    })
   ),
   outputs: Object.fromEntries(
     Object.entries(item.properties.outputs.properties).map(([key, value]) => [
@@ -190,20 +275,15 @@ export class PipelineCompiler extends PipelineProvider {
         const propertyValue = selfRef[propertyName] as unknown;
         if (propertyName === "dependsOn") {
           if (
-            typeof propertyValue !== "string" &&
-            !(
-              Array.isArray(propertyValue) &&
-              propertyValue
-                .map((item) => typeof item === "string")
-                .every(Boolean)
-            )
+            !isValidDependency(propertyValue) &&
+            !isValidDependencyList(propertyValue)
           ) {
             errors.push({
               type: "node-invalid-property-type",
               message: "The node has an invalid property type",
               nodeName,
               propertyName,
-              expectedType: "string | string[]",
+              expectedType: "string | { nodeName, outputName } | array thereof",
               actualType: typeof propertyValue,
             });
             validProperties = false;
@@ -301,6 +381,7 @@ export class PipelineCompiler extends PipelineProvider {
                     type: "input-ref",
                     nodeName,
                     input: {
+                      kind: inputNode.type,
                       self: {
                         name: inputName,
                         node: selfObj.node,
@@ -348,13 +429,23 @@ export class PipelineCompiler extends PipelineProvider {
               propertyValue as Record<string, unknown>
             );
             for (const [outputName, outputValue] of outputEntries) {
-              if (typeof outputValue !== "string") {
+              const isString = typeof outputValue === "string";
+              const isRefObject =
+                typeof outputValue === "object" &&
+                outputValue !== null &&
+                "nodeName" in outputValue &&
+                "inputName" in outputValue &&
+                typeof (outputValue as any).nodeName === "string" &&
+                typeof (outputValue as any).inputName === "string";
+
+              if (!isString && !isRefObject) {
                 errors.push({
                   type: "node-invalid-property-type",
                   message: "The node has an invalid property type",
                   nodeName,
                   propertyName: `${propertyName}.${outputName}`,
-                  expectedType: "string",
+                  expectedType:
+                    "string | { nodeName: string; inputName: string }",
                   actualType: typeof outputValue,
                 });
                 validProperties = false;
@@ -391,37 +482,51 @@ export class PipelineCompiler extends PipelineProvider {
     const entrypoints: PipelineTreeNode[] = [];
 
     for (const [nodeName, node] of Object.entries(basePipeline)) {
+      const normalizedDependsOn: Dependency[] = Array.isArray(node.dependsOn)
+        ? node.dependsOn
+        : node.dependsOn
+        ? [node.dependsOn]
+        : [];
+
       const treeNode: PipelineTreeNode = {
         name: nodeName,
-        dependsOn:
-          typeof node.dependsOn === "string"
-            ? [node.dependsOn]
-            : node.dependsOn,
+        dependsOn: normalizedDependsOn,
         node: node.node,
         inputs: node.inputs,
         outputs: node.outputs,
         children: [],
       };
+
       treeByName.set(nodeName, treeNode);
 
-      if (Array.isArray(node.dependsOn) && node.dependsOn.length === 0) {
+      if (normalizedDependsOn.length === 0) {
         entrypoints.push(treeNode);
       }
     }
 
     for (const treeNode of treeByName.values()) {
-      const { dependsOn } = treeNode;
-      if (Array.isArray(dependsOn)) {
-        for (const dependency of dependsOn) {
-          const dependencyNode = treeByName.get(dependency);
-          if (dependencyNode) {
-            dependencyNode.children.push(treeNode);
-          }
-        }
-      } else {
-        const dependencyNode = treeByName.get(dependsOn);
+      for (const dependency of treeNode.dependsOn) {
+        const depName =
+          typeof dependency === "string" ? dependency : dependency.nodeName;
+        const dependencyNode = treeByName.get(depName);
         if (dependencyNode) {
           dependencyNode.children.push(treeNode);
+        }
+      }
+    }
+
+    const conditionalDepNodeNames = new Set<string>();
+
+    for (const node of Object.values(basePipeline)) {
+      const dependsOn = Array.isArray(node.dependsOn)
+        ? node.dependsOn
+        : node.dependsOn
+        ? [node.dependsOn]
+        : [];
+
+      for (const dep of dependsOn) {
+        if (typeof dep === "object") {
+          conditionalDepNodeNames.add(dep.nodeName);
         }
       }
     }
@@ -441,49 +546,71 @@ export class PipelineCompiler extends PipelineProvider {
         message: "The node is not reachable from any entrypoint",
       });
     }
+    const validateDependency = (
+      nodeName: string,
+      dep: string | { nodeName: string; outputName: string }
+    ) => {
+      const depName = typeof dep === "string" ? dep : dep.nodeName;
 
+      if (typeof dep !== "string") {
+        const targetNode = basePipeline[dep.nodeName];
+        if (targetNode) {
+          const output = targetNode.outputs[dep.outputName];
+
+          if (typeof output !== "string") {
+            errors.push({
+              type: "conditional-dependency-invalid-output-ref",
+              message:
+                "Conditional dependency must refer to a direct output (string), not a computed or redirected one",
+              nodeName,
+              dependency: dep,
+            });
+            return;
+          }
+
+          const nodeSchema = schemaGetNode(targetNode.node);
+          if (nodeSchema) {
+            const outputSchema =
+              nodeSchema.properties.outputs.properties[output];
+            if (!outputSchema || schemaRefType(outputSchema) !== "boolean") {
+              errors.push({
+                type: "conditional-dependency-not-boolean",
+                message:
+                  "Conditional dependency output must be of type boolean",
+                nodeName,
+                dependency: dep,
+              });
+            }
+          }
+        }
+      }
+
+      if (!(depName in pipeline)) {
+        errors.push({
+          type: "dependency-not-found",
+          message: "The node has an invalid dependency",
+          nodeName,
+          dependency: dep,
+        });
+      } else if (depName === nodeName) {
+        errors.push({
+          type: "self-dependency",
+          message: "The depends on itself - this causes an infinite loop",
+          nodeName,
+        });
+      }
+    };
     for (const check of afterParseChecks) {
       switch (check.type) {
         case "depends-on":
           if (Array.isArray(check.dependsOn)) {
-            for (const dependsOn of check.dependsOn) {
-              if (!(dependsOn in pipeline)) {
-                errors.push({
-                  type: "dependency-not-found",
-                  message: "The node has an invalid dependency",
-                  nodeName: check.nodeName,
-                  dependency: dependsOn,
-                });
-              } else {
-                if (dependsOn === check.nodeName) {
-                  errors.push({
-                    type: "self-dependency",
-                    message:
-                      "The depends on itself - this causes an infinite loop",
-                    nodeName: check.nodeName,
-                  });
-                }
-              }
+            for (const dep of check.dependsOn) {
+              validateDependency(check.nodeName, dep);
             }
           } else {
-            if (!(check.dependsOn in pipeline)) {
-              errors.push({
-                type: "dependency-not-found",
-                message: "The node has an invalid dependency",
-                nodeName: check.nodeName,
-                dependency: check.dependsOn,
-              });
-            } else {
-              if (check.dependsOn === check.nodeName) {
-                errors.push({
-                  type: "self-dependency",
-                  message:
-                    "The depends on itself - this causes an infinite loop",
-                  nodeName: check.nodeName,
-                });
-              }
-            }
+            validateDependency(check.nodeName, check.dependsOn);
           }
+
           break;
         case "node":
           const nodeType = schemaGetNode(check.node);
@@ -521,11 +648,21 @@ export class PipelineCompiler extends PipelineProvider {
                 message: "The input is missing from the node type",
               });
             } else {
-              const outputOfDef =
-                inputType.properties?.type ??
-                inputType.anyOf?.find(
-                  (item) => item.properties.type.const === "outputOf"
-                )?.properties.type;
+              let outputOfDef: { [RefType]: string } | undefined;
+
+              if ("properties" in inputType && inputType.properties?.type) {
+                outputOfDef = inputType.properties.type;
+              } else if (
+                "anyOf" in inputType &&
+                Array.isArray(inputType.anyOf)
+              ) {
+                const ref = inputType.anyOf.find(
+                  (item) =>
+                    item.properties?.type?.const === "outputOf" ||
+                    item.properties?.type?.const === "lazyOutputOf"
+                );
+                outputOfDef = ref?.properties?.type as { [RefType]: string };
+              }
 
               if (!outputOfDef) {
                 errors.push({
@@ -560,83 +697,78 @@ export class PipelineCompiler extends PipelineProvider {
                         "The output node type referenced by an input was not found",
                     });
                   } else {
-                    const outputReference =
-                      outputNode.outputs[check.input.ref.outputName];
+                    const resolved = resolveOutputReference(
+                      check.input.ref.nodeName,
+                      check.input.ref.outputName,
+                      basePipeline
+                    );
 
-                    if (!outputReference) {
+                    if (!resolved) {
                       errors.push({
-                        type: "output-reference-not-found",
+                        type: "output-reference-resolution-failed",
                         nodeName: check.nodeName,
                         referenceNodeName: check.input.ref.nodeName,
                         inputName: check.input.self.name,
                         referenceOutputName: check.input.ref.outputName,
                         message:
-                          "The output referenced by an input was not found",
+                          "Could not resolve indirect output reference to a concrete output name",
                       });
-                    } else {
-                      const outputType =
-                        outputNodeType.properties.outputs.properties[
-                          outputReference
-                        ];
+                      break;
+                    }
 
-                      if (!outputType) {
-                        errors.push({
-                          type: "output-reference-type-not-found",
-                          nodeName: check.nodeName,
-                          referenceNodeName: check.input.ref.nodeName,
-                          inputName: check.input.self.name,
-                          referenceOutputName: check.input.ref.outputName,
-                          referenceNodeType: outputNode.node,
-                          referenceOutput: outputReference,
-                          message:
-                            "The output type was not found in the referenced node type",
-                        });
-                      } else {
-                        if (
-                          schemaRefType(outputType) !==
-                          schemaRefType(outputOfDef)
-                        ) {
-                          errors.push({
-                            type: "ref-input-type-mismatch",
-                            nodeName: check.nodeName,
-                            referenceNodeName: check.input.ref.nodeName,
-                            inputName: check.input.self.name,
-                            inputType: schemaRefType(outputOfDef),
-                            referenceOutputName: check.input.ref.outputName,
-                            referenceNodeType: outputNode.node,
-                            referenceOutput: outputReference,
-                            referenceOutputType: schemaRefType(outputType),
-                            message:
-                              "The referenced output type does not match the input type",
-                          });
-                        } else {
-                          const inputNode = treeByName.get(check.nodeName);
-                          if (!inputNode) {
-                            errors.push({
-                              type: "node-not-found",
-                              nodeName: check.nodeName,
-                              message: "The node was not found",
-                            });
-                          } else {
-                            if (
-                              !isDescendantByRef(
-                                treeByName.get(check.input.ref.nodeName),
-                                inputNode
-                              )
-                            ) {
-                              errors.push({
-                                type: "ref-input-not-dependant",
-                                nodeName: check.nodeName,
-                                referenceNodeName: check.input.ref.nodeName,
-                                inputName: check.input.self.name,
-                                referenceOutputName: check.input.ref.outputName,
-                                message:
-                                  "The referenced output's node is not a dependency to the input's node",
-                              });
-                            }
-                          }
-                        }
-                      }
+                    const outputNodeSchema = schemaGetNode(
+                      basePipeline[resolved.nodeName]?.node
+                    );
+                    if (!outputNodeSchema) {
+                      errors.push({
+                        type: "output-reference-node-type-not-found",
+                        nodeName: check.nodeName,
+                        referenceNodeName: resolved.nodeName,
+                        inputName: check.input.self.name,
+                        referenceOutputName: resolved.outputName,
+                        message:
+                          "The node schema for the resolved output was not found",
+                      });
+                      break;
+                    }
+
+                    const outputType =
+                      outputNodeSchema.properties.outputs.properties[
+                        resolved.outputName
+                      ];
+
+                    if (!outputType) {
+                      errors.push({
+                        type: "output-reference-type-not-found",
+                        nodeName: check.nodeName,
+                        referenceNodeName: resolved.nodeName,
+                        inputName: check.input.self.name,
+                        referenceOutputName: resolved.outputName,
+                        referenceNodeType: basePipeline[resolved.nodeName].node,
+                        referenceOutput: resolved.outputName,
+                        message:
+                          "The output type was not found in the referenced node type",
+                      });
+                      break;
+                    }
+
+                    if (
+                      schemaRefType(outputType) !== schemaRefType(outputOfDef)
+                    ) {
+                      errors.push({
+                        type: "ref-input-type-mismatch",
+                        nodeName: check.nodeName,
+                        referenceNodeName: resolved.nodeName,
+                        inputName: check.input.self.name,
+                        inputType: schemaRefType(outputOfDef),
+                        referenceOutputName: resolved.outputName,
+                        referenceNodeType: basePipeline[resolved.nodeName].node,
+                        referenceOutput: resolved.outputName,
+                        referenceOutputType: schemaRefType(outputType),
+                        message:
+                          "The referenced output type does not match the input type",
+                      });
+                      break;
                     }
                   }
                 }
@@ -668,10 +800,57 @@ export class PipelineCompiler extends PipelineProvider {
                 message: "The input is missing from the node type",
               });
             } else {
-              const constDef = inputType.anyOf?.find(
-                (item) => item.properties.type.const === "constant"
-              );
-              if (!constDef) {
+              if ("anyOf" in inputType) {
+                const constDef = inputType.anyOf.find(
+                  (item) =>
+                    "properties" in item &&
+                    item.properties?.type?.const === "constant"
+                );
+
+                if (!constDef) {
+                  errors.push({
+                    type: "node-type-input-no-const",
+                    nodeName: check.nodeName,
+                    nodeType: check.input.node,
+                    inputName: check.input.name,
+                    message: "The input cannot be represented as a constant",
+                  });
+                } else {
+                  assert(
+                    constDef.properties?.type?.const === "constant" &&
+                      "value" in constDef.properties,
+                    "unreachable code reached"
+                  );
+                  const valueSchema = constDef.properties?.value;
+
+                  if (!valueSchema || typeof valueSchema !== "object") {
+                    errors.push({
+                      type: "const-input-schema-invalid",
+                      nodeName: check.nodeName,
+                      nodeType: check.input.node,
+                      inputName: check.input.name,
+                      value: check.input.value,
+                      message:
+                        "The constant input schema is missing or invalid",
+                    });
+                  } else {
+                    const validateConstant = ajv.compile(valueSchema);
+
+                    if (!validateConstant(check.input.value)) {
+                      errors.push({
+                        type: "const-input-type-mismatch",
+                        nodeName: check.nodeName,
+                        nodeType: check.input.node,
+                        inputName: check.input.name,
+                        value: check.input.value,
+                        expectedSchema: valueSchema,
+                        message:
+                          "The input type does not match the expected schema",
+                      });
+                    }
+                  }
+                }
+              } else {
                 errors.push({
                   type: "node-type-input-no-const",
                   nodeName: check.nodeName,
@@ -679,27 +858,6 @@ export class PipelineCompiler extends PipelineProvider {
                   inputName: check.input.name,
                   message: "The input cannot be represented as a constant",
                 });
-              } else {
-                assert(
-                  constDef.properties.type.const === "constant" &&
-                    "value" in constDef.properties,
-                  "unreachable code reached"
-                );
-
-                const validateConstant = ajv.compile(constDef.properties.value);
-
-                if (!validateConstant(check.input.value)) {
-                  errors.push({
-                    type: "const-input-type-mismatch",
-                    nodeName: check.nodeName,
-                    nodeType: check.input.node,
-                    inputName: check.input.name,
-                    value: check.input.value,
-                    expectedSchema: constDef.properties.value,
-                    message:
-                      "The input type does not match the expected schema",
-                  });
-                }
               }
             }
           }
@@ -732,7 +890,17 @@ export class PipelineCompiler extends PipelineProvider {
           assert(false, `Unknown after parse check: ${JSON.stringify(check)}`);
       }
     }
-
+    for (const entry of entrypoints) {
+      if (detectUnconditionalCycle(entry)) {
+        errors.push({
+          type: "unconditional-cycle",
+          message:
+            "Detected a circular dependency with only unconditional links. This creates an infinite loop.",
+          nodeName: entry.name,
+        });
+        break;
+      }
+    }
     if (errors.length === 0) {
       return { errors: [], pipeline: new Pipeline(basePipeline, entrypoints) };
     } else {
