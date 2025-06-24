@@ -1,3 +1,4 @@
+import { assert } from "@mojsoski/assert";
 import { BrowserProvider, ViewportConfig } from "@silyze/browser-provider";
 import { Logger } from "@silyze/logger";
 
@@ -7,6 +8,7 @@ export type InputNode =
 
 export type Dependency = string | { nodeName: string; outputName: string };
 
+// TODO: rename inputName to outputName and fix the type-checking in the compiler
 export type Output = string | { nodeName: string; inputName: string };
 
 export type GenericNode = {
@@ -26,6 +28,8 @@ export interface EvaluationGC {
 export type EvaluationNodeContext = {
   logger: Logger;
   gc: EvaluationGC;
+  runtime: EvaluationRuntime;
+  signal?: AbortSignal;
 };
 
 export type EvaluationNode = (
@@ -75,13 +79,10 @@ export class Pipeline {
   }
 }
 
-type PipelineNodeOutput = Record<string, unknown>;
-type PipelineThreadOutputs = Record<string, Record<string, PipelineNodeOutput>>;
-
 type PipelineThreadState =
   | {
       status: "pending";
-      promise: Promise<PipelineThreadOutputs>;
+      promise: Promise<void>;
     }
   | {
       status: "error";
@@ -89,36 +90,151 @@ type PipelineThreadState =
     }
   | {
       status: "complete";
-      outputs: PipelineThreadOutputs;
     };
 
+export type EvaluationRuntime = {
+  functions: Record<string, (doNotRunChildren?: boolean) => Promise<void>>;
+  outputs: Record<string, Record<string, any>>;
+  assert: (value: unknown, message?: string) => asserts value;
+  invoke: (name: string, doNotRunChildren?: boolean) => Promise<void>;
+  state: Record<string, "complete" | "pending" | "error">;
+  library: Record<
+    string,
+    (inputs: Record<string, unknown>) => Promise<Record<string, unknown>>
+  >;
+};
+
 type PipelineThread = {
-  root: PipelineTreeNode;
   state: PipelineThreadState;
-  gc: EvaluationGC;
+  runtime: EvaluationRuntime;
 };
 
 export async function waitForPipelineThread(thread: PipelineThread) {
   if (thread.state.status === "pending") {
     await thread.state.promise;
+    return;
   }
   if (thread.state.status === "error") {
     throw thread.state.status;
   }
+
+  if (thread.state.status === "complete") {
+    return;
+  }
+
+  assert(false, "Unreachable code reached");
 }
 
+// TODO: use yield and yield * instead of await to have controlled execution
+// TODO: move this into a class and add logging where appropriate
+// TODO: also add a bytecode step, and emit all functions outside of each other
+function jitTree(entrypoint: PipelineTreeNode) {
+  const chunks: string[] = [];
+  const emit = (node: PipelineTreeNode, seen = new Set<PipelineTreeNode>()) => {
+    seen.add(node);
+    chunks.push(
+      "this.functions[",
+      JSON.stringify(node.name),
+      "]=async function(c){"
+    );
+    for (const dependency of node.dependsOn) {
+      if (typeof dependency !== "string") {
+        chunks.push(
+          "await this.invoke(",
+          JSON.stringify(dependency.nodeName),
+          ", true);"
+        );
+        chunks.push(
+          "if(this.outputs[",
+          JSON.stringify(dependency.nodeName),
+          "][",
+          JSON.stringify(dependency.outputName),
+          "]!==true)return;"
+        );
+      }
+    }
+
+    chunks.push("const inputs={};");
+    for (const [inputName, inputValue] of Object.entries(node.inputs)) {
+      chunks.push("inputs[", JSON.stringify(inputName), "]=");
+      if (inputValue.type === "constant") {
+        chunks.push(JSON.stringify(inputValue.value), ";");
+      } else {
+        chunks.push(
+          "this.outputs[",
+          JSON.stringify(inputValue.nodeName),
+          "][",
+          JSON.stringify(inputValue.outputName),
+          "];"
+        );
+      }
+    }
+
+    chunks.push(
+      "const libraryOutput=await this.library[",
+      JSON.stringify(node.node),
+      "](inputs);"
+    );
+
+    chunks.push("this.outputs[", JSON.stringify(node.name), "]={};");
+    for (const [key, value] of Object.entries(node.outputs)) {
+      if (typeof value === "string") {
+        chunks.push(
+          "this.outputs[",
+          JSON.stringify(node.name),
+          "][",
+          JSON.stringify(value),
+          "]="
+        );
+      } else {
+        chunks.push(
+          "this.outputs[",
+          JSON.stringify(value.nodeName),
+          "][",
+          JSON.stringify(value.inputName),
+          "]="
+        );
+      }
+      chunks.push("libraryOutput[", JSON.stringify(key), "];");
+    }
+
+    chunks.push("this.state[", JSON.stringify(node.name), ']="complete";');
+
+    chunks.push("const children=[];");
+
+    for (const child of node.children) {
+      if (!seen.has(child)) {
+        emit(child, new Set(seen));
+      }
+      chunks.push(
+        "if(!c)children.push(this.invoke(",
+        JSON.stringify(child.name),
+        "));"
+      );
+    }
+
+    chunks.push("await Promise.all(children);");
+
+    chunks.push("};");
+  };
+
+  emit(entrypoint);
+
+  const code = Function(chunks.join(""));
+
+  return (runtime: EvaluationRuntime) => code.apply(runtime);
+}
+
+// TODO: add logging where appropriate
 export class PipelineEvaluation {
   #logger: Logger;
   #library: EvaluationLibrary;
   #entrypoints: PipelineTreeNode[];
-  #evaluated: Map<string, PipelineThreadOutputs> = new Map();
 
   constructor(entrypoints: PipelineTreeNode[], config: EvaluationConfig) {
     this.#logger = config.logger.createScope("eval");
     this.#library = config.libraryProvider(config);
     this.#entrypoints = entrypoints;
-
-    console.dir(this.#entrypoints, { depth: null });
 
     this.#logger.log(
       "debug",
@@ -127,284 +243,67 @@ export class PipelineEvaluation {
     );
   }
 
-  #createThreadWithGC(
-    node: PipelineTreeNode,
-    signal: AbortSignal | undefined,
-    gc: EvaluationGC,
-    markChanged: () => void
-  ): PipelineThread {
-    const promise = this.#evaluateNode(node, gc, signal);
-    const thread: PipelineThread = {
-      root: node,
-      gc,
+  async #createThread(
+    entrypoint: PipelineTreeNode,
+    signal?: AbortSignal
+  ): Promise<PipelineThread> {
+    const gc = createEvaluationGC(this.#logger);
+    const runtime = this.#createRuntime(gc, signal);
+
+    jitTree(entrypoint)(runtime);
+
+    return {
+      runtime,
       state: {
         status: "pending",
-        promise: promise
-          .then((outputs) => {
-            this.#logger.log(
-              "debug",
-              "thread",
-              `Evaluation complete: ${node.name}`
-            );
-            thread.state = { status: "complete", outputs };
-            markChanged();
-            return outputs;
-          })
-          .catch((error) => {
-            this.#logger.log(
-              "warn",
-              "thread",
-              `Evaluation error: ${node.name}`,
-              error
-            );
-            thread.state = { status: "error", error };
-            throw error;
-          }),
+        promise: runtime
+          .invoke(entrypoint.name)
+          .finally(() => gc[EvaluationGCCollect]()),
       },
     };
-    return thread;
   }
 
-  async *#evaluateRecursive(
-    name: string,
-    visited: Set<string>,
-    signal: AbortSignal | undefined,
-    gc: EvaluationGC,
-    markChanged: () => void
-  ): AsyncGenerator<PipelineThread> {
-    if (visited.has(name)) return;
-    visited.add(name);
+  #createRuntime(gc: EvaluationGC, signal?: AbortSignal): EvaluationRuntime {
+    const runtime: EvaluationRuntime = {
+      functions: {},
+      state: {},
+      assert(value, message) {
+        assert(value, message);
+      },
+      outputs: {},
+      async invoke(name: string, ...rest) {
+        this.state[name] = "pending";
+        try {
+          await this.functions[name].apply(this, rest);
+        } catch (e) {
+          this.state[name] = "error";
+          throw e;
+        }
+      },
+      library: Object.fromEntries(
+        Object.entries(this.#library).map(([name, fn]) => [
+          name,
+          (input) =>
+            fn(input, {
+              gc,
+              logger: this.#logger.createScope(name),
+              signal,
+              runtime,
+            }),
+        ])
+      ),
+    };
 
-    const node = this.#findNodeByName(name);
-    if (!node) return;
-
-    for (const dep of node.dependsOn) {
-      const depName = typeof dep === "string" ? dep : dep.nodeName;
-      yield* this.#evaluateRecursive(depName, visited, signal, gc, markChanged);
-    }
-
-    const thread = this.#createThreadWithGC(node, signal, gc, markChanged);
-    yield thread;
+    return runtime;
   }
 
   async *evaluate(signal?: AbortSignal): AsyncGenerator<PipelineThread> {
-    let changed = true;
-    let cycle = 0;
-
-    while (changed && cycle < 100) {
-      changed = false;
-      cycle++;
-      const scope = this.#logger.createScope("evaluate");
-      scope.log("debug", "", `Evaluation cycle ${cycle}`);
-
-      const visited = new Set<string>();
-
-      for (const entry of this.#entrypoints) {
-        const entryScope = scope.createScope(`entry:${entry.name}`);
-        entryScope.log("debug", "", `Evaluating entrypoint: ${entry.name}`);
-
-        const gc = createEvaluationGC(this.#logger);
-        const threads: PipelineThread[] = [];
-
-        for await (const thread of this.#evaluateRecursive(
-          entry.name,
-          visited,
-          signal,
-          gc,
-          () => {
-            changed = true;
-          }
-        )) {
-          threads.push(thread);
-          yield thread;
-        }
-
-        await Promise.allSettled(
-          threads.map((t) =>
-            t.state.status === "pending" ? t.state.promise : undefined
-          )
-        );
-
-        entryScope.log(
-          "debug",
-          "",
-          `Collecting GC for entrypoint: ${entry.name}`
-        );
-        await gc[EvaluationGCCollect]();
+    for (const entrypoint of this.#entrypoints) {
+      if (signal) {
+        signal.throwIfAborted();
       }
-
-      if (!changed) {
-        scope.log("debug", "", "No changes detected, exiting");
-      }
+      yield await this.#createThread(entrypoint, signal);
     }
-  }
-
-  #createThread(
-    node: PipelineTreeNode,
-    signal?: AbortSignal
-  ): PipelineThread & { state: { status: "pending" } } {
-    const gc = createEvaluationGC(this.#logger);
-    const promise = this.#evaluateNode(node, gc, signal);
-    const thread: PipelineThread = {
-      root: node,
-      gc,
-      state: {
-        status: "pending",
-        promise: promise
-          .then((outputs) => {
-            this.#logger.log(
-              "debug",
-              "thread",
-              `Evaluation complete: ${node.name}`
-            );
-            thread.state = { status: "complete", outputs };
-            return outputs;
-          })
-          .catch((error) => {
-            this.#logger.log(
-              "warn",
-              "thread",
-              `Evaluation error: ${node.name}`,
-              error
-            );
-            thread.state = { status: "error", error };
-            throw error;
-          }),
-      },
-    };
-    return thread as PipelineThread & { state: { status: "pending" } };
-  }
-
-  async #evaluateNode(
-    node: PipelineTreeNode,
-    gc: EvaluationGC,
-    signal?: AbortSignal,
-    path: Set<string> = new Set()
-  ): Promise<PipelineThreadOutputs> {
-    const scope = this.#logger.createScope(`eval:${node.name}`);
-    scope.log("debug", "(start)", `Evaluating node: ${node.name}`);
-
-    if (path.has(node.name)) {
-      scope.log("warn", "cycle", `Cycle detected, re-evaluating ${node.name}`);
-    } else if (this.#evaluated.has(node.name)) {
-      scope.log("debug", "cache", `Using cached result for ${node.name}`);
-      return this.#evaluated.get(node.name)!;
-    }
-
-    path.add(node.name);
-    const dependencyOutputs: Record<string, PipelineNodeOutput> = {};
-
-    for (const dep of node.dependsOn) {
-      const depName = typeof dep === "string" ? dep : dep.nodeName;
-      scope.log("debug", "dependency", `Resolving dependency: ${depName}`);
-
-      const depNode = this.#findNodeByName(depName);
-      if (!depNode) throw new Error(`Missing dependency node: ${depName}`);
-
-      const result = await this.#evaluateNode(
-        depNode,
-        gc,
-        signal,
-        new Set(path)
-      );
-      Object.assign(dependencyOutputs, result[depName]);
-    }
-
-    scope.log("debug", "input", "Resolving inputs");
-    const inputs = await this.#resolveInputs(node, dependencyOutputs);
-    scope.log("debug", "inputs", "Resolved inputs", inputs);
-
-    const fn = this.#library[node.node];
-    if (!fn) throw new Error(`Missing node implementation: ${node.node}`);
-
-    scope.log("debug", "execute", `Invoking implementation for ${node.node}`);
-    const result = await fn(inputs, { logger: scope, gc });
-
-    const output: PipelineThreadOutputs = {
-      [node.name]: {
-        [node.node]: result,
-      },
-    };
-
-    for (const [outKey, outVal] of Object.entries(node.outputs)) {
-      const value = result[outKey];
-      if (!value) continue;
-
-      if (typeof outVal === "object" && outVal !== null) {
-        const targetNode = this.#findNodeByName(outVal.nodeName);
-        if (!targetNode) continue;
-
-        const targetInput = targetNode.inputs[outVal.inputName];
-        if (
-          !targetInput ||
-          targetInput.type !== "constant" ||
-          targetInput.value !== value
-        ) {
-          targetNode.inputs[outVal.inputName] = { type: "constant", value };
-          this.#logger.log(
-            "debug",
-            "eval",
-            `Updated input: ${outVal.nodeName}.${outVal.inputName} = ${value}`
-          );
-
-          this.#evaluated.delete(outVal.nodeName);
-        }
-      }
-    }
-    if (!path.has(node.name)) {
-      this.#evaluated.set(node.name, output);
-      scope.log("debug", "cache", `Stored result in cache for ${node.name}`);
-    }
-
-    path.delete(node.name);
-    scope.log("debug", "(done)", `Finished node: ${node.name}`);
-
-    return output;
-  }
-
-  async #resolveInputs(
-    node: PipelineTreeNode,
-    dependencyOutputs: Record<string, PipelineNodeOutput>
-  ): Promise<Record<string, unknown>> {
-    const resolved: Record<string, unknown> = {};
-    const scope = this.#logger.createScope(`inputs:${node.name}`);
-
-    for (const [key, input] of Object.entries(node.inputs)) {
-      if (input.type === "constant") {
-        resolved[key] = input.value;
-        scope.log("debug", "constant", `${key} =`, input.value);
-      } else if (input.type === "outputOf") {
-        const output = dependencyOutputs[input.nodeName];
-        if (!output) {
-          throw new Error(`Missing output from dependency: ${input.nodeName}`);
-        }
-        resolved[key] = output[input.outputName];
-        scope.log(
-          "debug",
-          "outputOf",
-          `${key} <- ${input.nodeName}.${input.outputName} =`,
-          output[input.outputName]
-        );
-      } else {
-        scope.log("warn", "input", `Unknown input type for ${key}`, input);
-        throw new Error(`Unknown input type: ${(input as any).type}`);
-      }
-    }
-
-    return resolved;
-  }
-
-  #findNodeByName(name: string): PipelineTreeNode | undefined {
-    const scope = this.#logger.createScope("findNode");
-    scope.log("debug", "search", `Looking for node: ${name}`);
-    const stack = [...this.#entrypoints];
-    while (stack.length > 0) {
-      const current = stack.pop()!;
-      if (current.name === name) return current;
-      stack.push(...current.children);
-    }
-    scope.log("warn", "missing", `Node not found: ${name}`);
-    return undefined;
   }
 }
 

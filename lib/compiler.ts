@@ -509,6 +509,7 @@ export class PipelineCompiler extends PipelineProvider {
         const depName =
           typeof dependency === "string" ? dependency : dependency.nodeName;
         const dependencyNode = treeByName.get(depName);
+
         if (dependencyNode) {
           dependencyNode.children.push(treeNode);
         }

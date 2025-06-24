@@ -1,4 +1,4 @@
-import { createJsonLogger } from "@silyze/logger";
+import { Logger, LogSeverity } from "@silyze/logger";
 import {
   GenericNode,
   hasPipeline,
@@ -20,26 +20,14 @@ const pipelineSource: Record<string, GenericNode> = {
     outputs: { value: "value" },
   },
 
-  decrement: {
-    dependsOn: ["counter"],
-    node: "logic::subtract",
-    inputs: {
-      a: { type: "outputOf", nodeName: "counter", outputName: "value" },
-      b: { type: "constant", value: 1 },
-    },
-    outputs: {
-      result: { nodeName: "counter", inputName: "value" },
-    },
-  },
-
   check: {
-    dependsOn: ["decrement"],
-    node: "logic::greaterThanOrEqual",
+    dependsOn: "counter",
+    node: "logic::greaterThan",
     inputs: {
       a: {
         type: "outputOf",
-        nodeName: "decrement",
-        outputName: "result",
+        nodeName: "counter",
+        outputName: "value",
       },
       b: { type: "constant", value: 0 },
     },
@@ -47,9 +35,8 @@ const pipelineSource: Record<string, GenericNode> = {
       result: "result",
     },
   },
-
   loop: {
-    dependsOn: [{ nodeName: "check", outputName: "result" }],
+    dependsOn: [{ nodeName: "check", outputName: "result" }, "decrement"],
     node: "log::info",
     inputs: {
       value: {
@@ -59,13 +46,40 @@ const pipelineSource: Record<string, GenericNode> = {
     },
     outputs: {},
   },
+  decrement: {
+    dependsOn: "loop",
+    node: "logic::subtract",
+    inputs: {
+      a: { type: "outputOf", nodeName: "counter", outputName: "value" },
+      b: { type: "constant", value: 1 },
+    },
+    outputs: {
+      result: { nodeName: "counter", inputName: "value" },
+    },
+  },
 };
 
 async function main() {
   const compiler = new PipelineCompiler();
   const result = compiler.compile(pipelineSource);
   if (hasPipeline(result)) {
-    const logger = createJsonLogger(console.log);
+    const logger = new (class extends Logger {
+      log<T>(severity: LogSeverity, _area: string, message: string): void {
+        if (severity === "debug") return;
+        if (severity === "error" || severity === "fatal") {
+          console.error(message);
+        }
+        if (severity === "warn") {
+          console.warn(message);
+        }
+        if (severity === "info") {
+          console.log(message);
+        }
+      }
+      createScope(): Logger {
+        return this;
+      }
+    })();
 
     const evaluation = result.pipeline.createEvaluation({
       logger,
