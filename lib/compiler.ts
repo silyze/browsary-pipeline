@@ -60,6 +60,16 @@ type AfterParseCheck =
         node: `${string}::${string}`;
         name: string;
       };
+    }
+  | {
+      type: "output-ref-type";
+      nodeName: string;
+      outputName: string;
+
+      output: {
+        nodeName: string;
+        outputName: string;
+      };
     };
 
 function isValidDependency(
@@ -161,7 +171,10 @@ function resolveOutputReference(
   const node = pipeline[nodeName];
   if (!node) return undefined;
 
-  const output = node.outputs[outputName];
+  const output = Object.entries(node.outputs)
+    .find((item) => item[1] === outputName)
+    ?.at(0);
+
   if (typeof output === "string") {
     return { nodeName, outputName: output };
   }
@@ -170,11 +183,11 @@ function resolveOutputReference(
     typeof output === "object" &&
     output !== null &&
     "nodeName" in output &&
-    "inputName" in output
+    "outputName" in output
   ) {
     return resolveOutputReference(
       output.nodeName,
-      output.inputName,
+      output.outputName,
       pipeline,
       seen
     );
@@ -434,9 +447,9 @@ export class PipelineCompiler extends PipelineProvider {
                 typeof outputValue === "object" &&
                 outputValue !== null &&
                 "nodeName" in outputValue &&
-                "inputName" in outputValue &&
+                "outputName" in outputValue &&
                 typeof (outputValue as any).nodeName === "string" &&
-                typeof (outputValue as any).inputName === "string";
+                typeof (outputValue as any).outputName === "string";
 
               if (!isString && !isRefObject) {
                 errors.push({
@@ -445,7 +458,7 @@ export class PipelineCompiler extends PipelineProvider {
                   nodeName,
                   propertyName: `${propertyName}.${outputName}`,
                   expectedType:
-                    "string | { nodeName: string; inputName: string }",
+                    "string | { nodeName: string; outputName: string }",
                   actualType: typeof outputValue,
                 });
                 validProperties = false;
@@ -456,7 +469,17 @@ export class PipelineCompiler extends PipelineProvider {
                 node: `${string}::${string}` | undefined;
               };
 
-              if (obj.node) {
+              if (isRefObject) {
+                afterParseChecks.push({
+                  type: "output-ref-type",
+                  nodeName,
+                  outputName,
+                  output: {
+                    nodeName: outputValue.nodeName as string,
+                    outputName: outputValue.outputName as string,
+                  },
+                });
+              } else if (obj.node) {
                 afterParseChecks.push({
                   type: "output-name",
                   nodeName,
@@ -778,6 +801,7 @@ export class PipelineCompiler extends PipelineProvider {
           }
 
           break;
+
         case "input-const":
           const inputConstNodeType = schemaGetNode(check.input.node);
           if (!inputConstNodeType) {
@@ -862,6 +886,125 @@ export class PipelineCompiler extends PipelineProvider {
               }
             }
           }
+          break;
+
+        case "output-ref-type":
+          const outputRefNodeSelf = treeByName.get(check.nodeName);
+          const outputRefNodeTarget = treeByName.get(check.output.nodeName);
+
+          if (!outputRefNodeSelf) {
+            errors.push({
+              type: "output-ref-self-node-not-found",
+              nodeName: check.nodeName,
+              message: "The source node of the output reference was not found",
+            });
+            break;
+          }
+
+          if (!outputRefNodeTarget) {
+            errors.push({
+              type: "output-ref-target-node-not-found",
+              nodeName: check.nodeName,
+              referenceNodeName: check.output.nodeName,
+              message: "The target node of the output reference was not found",
+            });
+            break;
+          }
+
+          const outputRefNodeSelfSchema = schemaGetNode(outputRefNodeSelf.node);
+          if (!outputRefNodeSelfSchema) {
+            errors.push({
+              type: "output-ref-self-node-type-not-found",
+              nodeName: check.nodeName,
+              nodeType: outputRefNodeSelf.node,
+              message: "The type of the source node was not found",
+            });
+            break;
+          }
+
+          const outputRefNodeTargetSchema = schemaGetNode(
+            outputRefNodeTarget.node
+          );
+          if (!outputRefNodeTargetSchema) {
+            errors.push({
+              type: "output-ref-target-node-type-not-found",
+              nodeName: check.nodeName,
+              referenceNodeName: check.output.nodeName,
+              referenceNodeType: outputRefNodeTarget.node,
+              message: "The type of the target node was not found",
+            });
+            break;
+          }
+
+          const outputRefSelfSchema =
+            outputRefNodeSelfSchema.properties.outputs.properties[
+              check.outputName
+            ];
+          if (!outputRefSelfSchema) {
+            errors.push({
+              type: "output-ref-self-output-not-found",
+              nodeName: check.nodeName,
+              outputName: check.outputName,
+              nodeType: outputRefNodeSelf.node,
+              message: "The source output name was not found in the node type",
+            });
+            break;
+          }
+
+          const outputRefTargetResolved = resolveOutputReference(
+            check.output.nodeName,
+            check.output.outputName,
+            basePipeline
+          );
+          if (!outputRefTargetResolved) {
+            errors.push({
+              type: "output-ref-target-resolution-failed",
+              nodeName: check.nodeName,
+              referenceNodeName: check.output.nodeName,
+              referenceOutputName: check.output.outputName,
+              message: "Could not resolve the target output reference",
+            });
+            break;
+          }
+
+          const resolvedOutputName = outputRefTargetResolved.outputName;
+          const outputRefTargetOutputSchema =
+            outputRefNodeTargetSchema.properties.outputs.properties[
+              resolvedOutputName
+            ];
+
+          if (!outputRefTargetOutputSchema) {
+            errors.push({
+              type: "output-ref-target-output-not-found",
+              nodeName: check.nodeName,
+              referenceNodeName: check.output.nodeName,
+              referenceOutputName: resolvedOutputName,
+              referenceNodeType: outputRefNodeTarget.node,
+              message: "The target output name was not found in the node type",
+            });
+            break;
+          }
+
+          const selfType = schemaRefType(outputRefSelfSchema);
+          const targetType = schemaRefType(outputRefTargetOutputSchema);
+
+          if (selfType !== targetType) {
+            errors.push({
+              type: "output-ref-type-mismatch",
+              nodeName: check.nodeName,
+              outputName: check.outputName,
+              referenceNodeName: check.output.nodeName,
+              referenceOutputName: resolvedOutputName,
+              referenceNodeType: outputRefNodeTarget.node,
+              sourceNodeType: outputRefNodeSelf.node,
+              sourceOutputType: selfType,
+              targetOutputType: targetType,
+              message:
+                "The referenced output type does not match the declared output type",
+            });
+          }
+
+          break;
           break;
         case "output-name":
           const outputNodeType = schemaGetNode(check.output.node);

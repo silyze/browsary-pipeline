@@ -212,6 +212,64 @@ export type PipelineCompileError =
       inputName: string;
       referenceOutputName: string;
       message: "The node schema for the resolved output was not found";
+    }
+  | {
+      type: "output-ref-self-node-not-found";
+      nodeName: string;
+      message: string;
+    }
+  | {
+      type: "output-ref-target-node-not-found";
+      nodeName: string;
+      referenceNodeName: string;
+      message: string;
+    }
+  | {
+      type: "output-ref-self-node-type-not-found";
+      nodeName: string;
+      nodeType: string;
+      message: string;
+    }
+  | {
+      type: "output-ref-target-node-type-not-found";
+      nodeName: string;
+      referenceNodeName: string;
+      referenceNodeType: string;
+      message: string;
+    }
+  | {
+      type: "output-ref-self-output-not-found";
+      nodeName: string;
+      nodeType: string;
+      outputName: string;
+      message: string;
+    }
+  | {
+      type: "output-ref-target-resolution-failed";
+      nodeName: string;
+      referenceNodeName: string;
+      referenceOutputName: string;
+      message: string;
+    }
+  | {
+      type: "output-ref-target-output-not-found";
+      nodeName: string;
+      referenceNodeName: string;
+      referenceNodeType: string;
+      referenceOutputName: string;
+      message: string;
+    }
+  | {
+      type: "output-ref-type-mismatch";
+      nodeName: string;
+      outputName: string;
+      sourceNodeType: string;
+      referenceNodeName: string;
+      referenceOutputName: string;
+      referenceNodeType: string;
+      sourceOutputType: string;
+      targetOutputType: string;
+      message: string;
     };
 
 export type PipelineCompileResult =

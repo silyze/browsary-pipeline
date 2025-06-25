@@ -54,7 +54,7 @@ const pipelineSource: Record<string, GenericNode> = {
       b: { type: "constant", value: 1 },
     },
     outputs: {
-      result: { nodeName: "counter", inputName: "value" },
+      result: { nodeName: "counter", outputName: "value" },
     },
   },
 };

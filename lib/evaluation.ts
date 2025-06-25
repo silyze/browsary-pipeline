@@ -8,8 +8,7 @@ export type InputNode =
 
 export type Dependency = string | { nodeName: string; outputName: string };
 
-// TODO: rename inputName to outputName and fix the type-checking in the compiler
-export type Output = string | { nodeName: string; inputName: string };
+export type Output = string | { nodeName: string; outputName: string };
 
 export type GenericNode = {
   node: `${string}::${string}`;
@@ -126,8 +125,6 @@ export async function waitForPipelineThread(thread: PipelineThread) {
 }
 
 // TODO: use yield and yield * instead of await to have controlled execution
-// TODO: move this into a class and add logging where appropriate
-// TODO: also add a bytecode step, and emit all functions outside of each other
 function jitTree(entrypoint: PipelineTreeNode) {
   const chunks: string[] = [];
   const emit = (node: PipelineTreeNode, seen = new Set<PipelineTreeNode>()) => {
@@ -191,7 +188,7 @@ function jitTree(entrypoint: PipelineTreeNode) {
           "this.outputs[",
           JSON.stringify(value.nodeName),
           "][",
-          JSON.stringify(value.inputName),
+          JSON.stringify(value.outputName),
           "]="
         );
       }
@@ -225,7 +222,6 @@ function jitTree(entrypoint: PipelineTreeNode) {
   return (runtime: EvaluationRuntime) => code.apply(runtime);
 }
 
-// TODO: add logging where appropriate
 export class PipelineEvaluation {
   #logger: Logger;
   #library: EvaluationLibrary;
