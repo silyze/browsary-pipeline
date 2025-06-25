@@ -219,15 +219,28 @@ export class PipelineEvaluation {
     entrypoint: PipelineTreeNode,
     signal?: AbortSignal
   ): Promise<PipelineThread> {
+    const threadLogger = this.#logger.createScope(`thread:${entrypoint.name}`);
+    threadLogger.log("debug", "init", "Creating evaluation thread");
+
     const gc = createEvaluationGC(this.#logger);
     const runtime = this.#createRuntime(gc, signal);
 
     const jit = new PipelineTreeJIT(entrypoint, this.#library);
+    threadLogger.log("debug", "jit", "Compiling JIT unit");
+
     const unit = jit.compile();
+
+    threadLogger.log("debug", "jit", "JIT unit compiled successfully", {
+      entrypoint: entrypoint.name,
+      sourceLength: unit.source.length,
+      source: unit.source,
+    });
+
     unit.injectInto(runtime);
+    threadLogger.log("debug", "jit", "Injected compiled unit into runtime");
 
     const gen = runtime.functions[entrypoint.name].call(runtime);
-    const threadLogger = this.#logger.createScope(`thread:${entrypoint.name}`);
+    threadLogger.log("debug", "generator", "Pipeline generator created");
 
     const thread: PipelineThread = {
       runtime,
@@ -237,14 +250,17 @@ export class PipelineEvaluation {
       },
     };
 
-    assert(thread.state.status === "pending", "Impossible state");
+    threadLogger.log("debug", "start", "Starting pipeline thread execution");
 
+    assert(thread.state.status === "pending");
     thread.state.promise = (async () => {
       try {
         await runPipelineGenerator(threadLogger, gen, gc, signal);
         thread.state = { status: "complete" };
+        threadLogger.log("debug", "status", "Thread marked complete");
       } catch (error) {
         thread.state = { status: "error", error };
+        threadLogger.log("error", "status", "Thread marked error", error);
         throw error;
       }
     })();
@@ -253,6 +269,9 @@ export class PipelineEvaluation {
   }
 
   #createRuntime(gc: EvaluationGC, signal?: AbortSignal): EvaluationRuntime {
+    const runtimeLogger = this.#logger.createScope("runtime");
+    runtimeLogger.log("debug", "init", "Creating evaluation runtime");
+
     const runtime: EvaluationRuntime = {
       functions: {},
       state: {},
@@ -274,15 +293,29 @@ export class PipelineEvaluation {
       ),
     };
 
+    runtimeLogger.log("debug", "init", "Runtime created");
     return runtime;
   }
 
   async *evaluate(signal?: AbortSignal): AsyncGenerator<PipelineThread> {
     for (const entrypoint of this.#entrypoints) {
-      if (signal) {
-        signal.throwIfAborted();
-      }
-      yield await this.#createThread(entrypoint, signal);
+      if (signal) signal.throwIfAborted();
+
+      const evalLogger = this.#logger.createScope("evaluate");
+      evalLogger.log(
+        "debug",
+        "entry",
+        `Evaluating entrypoint: ${entrypoint.name}`
+      );
+
+      const thread = await this.#createThread(entrypoint, signal);
+
+      evalLogger.log(
+        "debug",
+        "thread",
+        `Thread created for ${entrypoint.name}`
+      );
+      yield thread;
     }
   }
 }
