@@ -178,7 +178,14 @@ async function runPipelineGenerator(
   try {
     for await (const event of generator) {
       if (signal) signal.throwIfAborted();
-      scope.log("debug", `yield:${step}`, "Step yielded", event);
+      if (event.event === "error") {
+        scope.log("error", `yield:${step}`, "Step yielded", {
+          ...event,
+          error: createErrorObject(event.error),
+        });
+      } else {
+        scope.log("debug", `yield:${step}`, "Step yielded", event);
+      }
       step++;
     }
 
@@ -260,7 +267,12 @@ export class PipelineEvaluation {
         threadLogger.log("debug", "status", "Thread marked complete");
       } catch (error) {
         thread.state = { status: "error", error };
-        threadLogger.log("error", "status", "Thread marked error", error);
+        threadLogger.log(
+          "error",
+          "status",
+          "Thread marked error",
+          createErrorObject(error)
+        );
         throw error;
       }
     })();

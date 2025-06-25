@@ -205,7 +205,7 @@ export class PipelineTreeJIT {
       `  yield { node: ${JSON.stringify(
         node.name
       )}, event: "error", error: e };`,
-      `  return;`,
+      ` throw e;`,
       `}`,
       "};"
     );
