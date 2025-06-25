@@ -6,14 +6,16 @@ import PagePackage from "./PagePackage";
 import LogicPackage from "./LogicPackage";
 import DeclarePackage from "./DeclarePackage";
 import LogPackage from "./LogPackage";
+import TypePackage from "./TypePackage";
 
 export type { RefType };
 
 const standard = [
+  DeclarePackage,
+  LogicPackage,
+  TypePackage,
   BrowserPackage,
   PagePackage,
-  LogicPackage,
-  DeclarePackage,
   LogPackage,
 ];
 
