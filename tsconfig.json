@@ -10,7 +10,8 @@
     "allowSyntheticDefaultImports": true,
     "removeComments": true,
     "declaration": true,
-    "incremental": true
+    "incremental": true,
+    "experimentalDecorators": true
   },
   "lib": ["esnext"],
   "exclude": ["node_modules", "dist/**/*"]

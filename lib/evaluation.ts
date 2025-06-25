@@ -1,6 +1,8 @@
 import { assert } from "@mojsoski/assert";
 import { BrowserProvider, ViewportConfig } from "@silyze/browser-provider";
-import { Logger } from "@silyze/logger";
+import { Logger, createErrorObject } from "@silyze/logger";
+import { PipelineTreeJIT } from "./jit";
+import { EvaluationPackage } from "./library";
 
 export type InputNode =
   | { type: "outputOf"; nodeName: string; outputName: string }
@@ -36,7 +38,10 @@ export type EvaluationNode = (
   context: EvaluationNodeContext
 ) => Promise<Record<string, unknown>>;
 
-export type EvaluationLibrary = Record<`${string}::${string}`, EvaluationNode>;
+export type EvaluationLibrary = Record<
+  `${string}::${string}`,
+  EvaluationNode & { package: EvaluationPackage<string> }
+>;
 export type EvaluationLibraryProvider = (
   config: EvaluationConfig
 ) => EvaluationLibrary;
@@ -92,10 +97,12 @@ type PipelineThreadState =
     };
 
 export type EvaluationRuntime = {
-  functions: Record<string, (doNotRunChildren?: boolean) => Promise<void>>;
+  functions: Record<
+    string,
+    (doNotRunChildren?: boolean) => AsyncGenerator<void, void, unknown>
+  >;
   outputs: Record<string, Record<string, any>>;
   assert: (value: unknown, message?: string) => asserts value;
-  invoke: (name: string, doNotRunChildren?: boolean) => Promise<void>;
   state: Record<string, "complete" | "pending" | "error">;
   library: Record<
     string,
@@ -123,105 +130,6 @@ export async function waitForPipelineThread(thread: PipelineThread) {
 
   assert(false, "Unreachable code reached");
 }
-
-// TODO: use yield and yield * instead of await to have controlled execution
-function jitTree(entrypoint: PipelineTreeNode) {
-  const chunks: string[] = [];
-  const emit = (node: PipelineTreeNode, seen = new Set<PipelineTreeNode>()) => {
-    seen.add(node);
-    chunks.push(
-      "this.functions[",
-      JSON.stringify(node.name),
-      "]=async function(c){"
-    );
-    for (const dependency of node.dependsOn) {
-      if (typeof dependency !== "string") {
-        chunks.push(
-          "await this.invoke(",
-          JSON.stringify(dependency.nodeName),
-          ", true);"
-        );
-        chunks.push(
-          "if(this.outputs[",
-          JSON.stringify(dependency.nodeName),
-          "][",
-          JSON.stringify(dependency.outputName),
-          "]!==true)return;"
-        );
-      }
-    }
-
-    chunks.push("const inputs={};");
-    for (const [inputName, inputValue] of Object.entries(node.inputs)) {
-      chunks.push("inputs[", JSON.stringify(inputName), "]=");
-      if (inputValue.type === "constant") {
-        chunks.push(JSON.stringify(inputValue.value), ";");
-      } else {
-        chunks.push(
-          "this.outputs[",
-          JSON.stringify(inputValue.nodeName),
-          "][",
-          JSON.stringify(inputValue.outputName),
-          "];"
-        );
-      }
-    }
-
-    chunks.push(
-      "const libraryOutput=await this.library[",
-      JSON.stringify(node.node),
-      "](inputs);"
-    );
-
-    chunks.push("this.outputs[", JSON.stringify(node.name), "]={};");
-    for (const [key, value] of Object.entries(node.outputs)) {
-      if (typeof value === "string") {
-        chunks.push(
-          "this.outputs[",
-          JSON.stringify(node.name),
-          "][",
-          JSON.stringify(value),
-          "]="
-        );
-      } else {
-        chunks.push(
-          "this.outputs[",
-          JSON.stringify(value.nodeName),
-          "][",
-          JSON.stringify(value.outputName),
-          "]="
-        );
-      }
-      chunks.push("libraryOutput[", JSON.stringify(key), "];");
-    }
-
-    chunks.push("this.state[", JSON.stringify(node.name), ']="complete";');
-
-    chunks.push("const children=[];");
-
-    for (const child of node.children) {
-      if (!seen.has(child)) {
-        emit(child, new Set(seen));
-      }
-      chunks.push(
-        "if(!c)children.push(this.invoke(",
-        JSON.stringify(child.name),
-        "));"
-      );
-    }
-
-    chunks.push("await Promise.all(children);");
-
-    chunks.push("};");
-  };
-
-  emit(entrypoint);
-
-  const code = Function(chunks.join(""));
-
-  return (runtime: EvaluationRuntime) => code.apply(runtime);
-}
-
 export class PipelineEvaluation {
   #logger: Logger;
   #library: EvaluationLibrary;
@@ -246,17 +154,57 @@ export class PipelineEvaluation {
     const gc = createEvaluationGC(this.#logger);
     const runtime = this.#createRuntime(gc, signal);
 
-    jitTree(entrypoint)(runtime);
+    const jit = new PipelineTreeJIT(entrypoint, this.#library);
+    const unit = jit.compile();
+    unit.injectInto(runtime);
 
-    return {
+    const gen = runtime.functions[entrypoint.name].call(runtime);
+
+    const threadLogger = this.#logger.createScope(`thread:${entrypoint.name}`);
+
+    const thread: PipelineThread = {
       runtime,
       state: {
         status: "pending",
-        promise: runtime
-          .invoke(entrypoint.name)
-          .finally(() => gc[EvaluationGCCollect]()),
+        promise: Promise.resolve(),
       },
     };
+
+    assert(thread.state.status === "pending", "Impossible state");
+
+    threadLogger.log("debug", "start", "Starting pipeline thread execution");
+
+    thread.state.promise = (async () => {
+      try {
+        let step = 0;
+        for await (const _ of gen) {
+          if (signal) signal.throwIfAborted();
+          threadLogger.log("debug", `yield:${step}`, "Step yielded");
+          step++;
+        }
+        thread.state = { status: "complete" };
+        threadLogger.log(
+          "debug",
+          "done",
+          `Execution complete after ${step} steps`
+        );
+      } catch (error) {
+        thread.state = { status: "error", error };
+        threadLogger.log(
+          "error",
+          "exception",
+          "Execution failed",
+          createErrorObject(error)
+        );
+        throw error;
+      } finally {
+        threadLogger.log("debug", "gc", "Running finalizers");
+        await gc[EvaluationGCCollect]();
+        threadLogger.log("debug", "gc", "Finalizers completed");
+      }
+    })();
+
+    return thread;
   }
 
   #createRuntime(gc: EvaluationGC, signal?: AbortSignal): EvaluationRuntime {
@@ -267,15 +215,6 @@ export class PipelineEvaluation {
         assert(value, message);
       },
       outputs: {},
-      async invoke(name: string, ...rest) {
-        this.state[name] = "pending";
-        try {
-          await this.functions[name].apply(this, rest);
-        } catch (e) {
-          this.state[name] = "error";
-          throw e;
-        }
-      },
       library: Object.fromEntries(
         Object.entries(this.#library).map(([name, fn]) => [
           name,

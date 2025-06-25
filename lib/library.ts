@@ -4,6 +4,20 @@ import { EvaluationConfig } from "./evaluation";
 export const PackageName = Symbol("PackageName");
 export const PackageConfig = Symbol("PackageConfig");
 
+export function inline<T extends EvaluationPackage<string>>(
+  template: string
+): (target: T, propertyKey: string) => void {
+  return (target, propertyKey) => {
+    (target as any)["__inline::" + propertyKey] = template;
+  };
+}
+export function getInlineTemplate<T extends EvaluationPackage<string>>(
+  target: T,
+  propertyKey: string
+): string | undefined {
+  return (target as any)["__inline::" + propertyKey];
+}
+
 export interface IEvaluationPackage {
   [key: string]: EvaluationNode | undefined;
   get [PackageName](): string;
@@ -27,6 +41,18 @@ export abstract class EvaluationPackage<T extends string>
   [key: string]: EvaluationNode | undefined;
 }
 
+function wrapFunction(
+  pkg: EvaluationPackage<string>,
+  fn: EvaluationNode
+): EvaluationNode & { package: EvaluationPackage<string> } {
+  const partial: EvaluationNode &
+    Partial<{ package: EvaluationPackage<string> }> = fn;
+
+  partial.package = pkg;
+
+  return partial as EvaluationNode & { package: EvaluationPackage<string> };
+}
+
 export function createLibrary(
   ...packageConstructors: (new (
     config: EvaluationConfig
@@ -39,9 +65,9 @@ export function createLibrary(
 
         return Object.entries(pkg).map(
           ([name, impl]) =>
-            [`${pkg[PackageName]}::${name}`, impl] as [
+            [`${pkg[PackageName]}::${name}`, wrapFunction(pkg, impl!)] as [
               `${string}::${string}`,
-              EvaluationNode
+              EvaluationNode & { package: EvaluationPackage<string> }
             ]
         );
       })
