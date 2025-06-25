@@ -62,6 +62,41 @@ export type PipelineTreeNode = {
   children: PipelineTreeNode[];
 };
 
+export interface BaseNodeEvent {
+  node: string;
+  event: string;
+}
+
+export type NodeStartEvent = {
+  event: "start";
+} & BaseNodeEvent;
+
+export type NodeCompleteEvent = {
+  event: "end";
+} & BaseNodeEvent;
+
+export type NodeErrorEvent = {
+  event: "error";
+  error: unknown;
+} & BaseNodeEvent;
+
+export type NodeChildStartEvent = {
+  event: "child-start";
+  child: string;
+} & BaseNodeEvent;
+
+export type NodeChildEndEvent = {
+  event: "child-end";
+  child: string;
+} & BaseNodeEvent;
+
+export type PipelineNodeEvent =
+  | NodeStartEvent
+  | NodeCompleteEvent
+  | NodeErrorEvent
+  | NodeChildStartEvent
+  | NodeChildEndEvent;
+
 export class Pipeline {
   #pipeline: Record<string, GenericNode>;
   #entrypoints: PipelineTreeNode[];
@@ -99,7 +134,7 @@ type PipelineThreadState =
 export type EvaluationRuntime = {
   functions: Record<
     string,
-    (doNotRunChildren?: boolean) => AsyncGenerator<void, void, unknown>
+    (doNotRunChildren?: boolean) => AsyncGenerator<PipelineNodeEvent>
   >;
   outputs: Record<string, Record<string, any>>;
   assert: (value: unknown, message?: string) => asserts value;
@@ -130,6 +165,39 @@ export async function waitForPipelineThread(thread: PipelineThread) {
 
   assert(false, "Unreachable code reached");
 }
+
+async function runPipelineGenerator(
+  logger: Logger,
+  generator: AsyncGenerator<PipelineNodeEvent>,
+  gc: EvaluationGC,
+  signal?: AbortSignal
+): Promise<void> {
+  const scope = logger.createScope("runner");
+  let step = 0;
+
+  try {
+    for await (const event of generator) {
+      if (signal) signal.throwIfAborted();
+      scope.log("debug", `yield:${step}`, "Step yielded", event);
+      step++;
+    }
+
+    scope.log("debug", "done", `Execution complete after ${step} steps`);
+  } catch (error) {
+    scope.log(
+      "error",
+      "exception",
+      "Execution failed",
+      createErrorObject(error)
+    );
+    throw error;
+  } finally {
+    scope.log("debug", "gc", "Running finalizers");
+    await gc[EvaluationGCCollect]();
+    scope.log("debug", "gc", "Finalizers completed");
+  }
+}
+
 export class PipelineEvaluation {
   #logger: Logger;
   #library: EvaluationLibrary;
@@ -159,7 +227,6 @@ export class PipelineEvaluation {
     unit.injectInto(runtime);
 
     const gen = runtime.functions[entrypoint.name].call(runtime);
-
     const threadLogger = this.#logger.createScope(`thread:${entrypoint.name}`);
 
     const thread: PipelineThread = {
@@ -172,35 +239,13 @@ export class PipelineEvaluation {
 
     assert(thread.state.status === "pending", "Impossible state");
 
-    threadLogger.log("debug", "start", "Starting pipeline thread execution");
-
     thread.state.promise = (async () => {
       try {
-        let step = 0;
-        for await (const _ of gen) {
-          if (signal) signal.throwIfAborted();
-          threadLogger.log("debug", `yield:${step}`, "Step yielded");
-          step++;
-        }
+        await runPipelineGenerator(threadLogger, gen, gc, signal);
         thread.state = { status: "complete" };
-        threadLogger.log(
-          "debug",
-          "done",
-          `Execution complete after ${step} steps`
-        );
       } catch (error) {
         thread.state = { status: "error", error };
-        threadLogger.log(
-          "error",
-          "exception",
-          "Execution failed",
-          createErrorObject(error)
-        );
         throw error;
-      } finally {
-        threadLogger.log("debug", "gc", "Running finalizers");
-        await gc[EvaluationGCCollect]();
-        threadLogger.log("debug", "gc", "Finalizers completed");
       }
     })();
 

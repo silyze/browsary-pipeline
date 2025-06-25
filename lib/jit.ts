@@ -9,6 +9,7 @@ export interface CompileUnit {
   injectInto: (runtime: EvaluationRuntime) => void;
   source: string;
 }
+
 export class PipelineTreeJIT {
   #chunks: string[] = [];
   #entrypoint: PipelineTreeNode;
@@ -19,135 +20,191 @@ export class PipelineTreeJIT {
     this.#library = library;
   }
 
+  #collectAll(node: PipelineTreeNode, seen: Set<PipelineTreeNode>) {
+    if (seen.has(node)) return;
+    seen.add(node);
+    for (const child of node.children) {
+      this.#collectAll(child, seen);
+    }
+  }
+
   compile(): CompileUnit {
-    this.emit(this.#entrypoint, new Set());
-    const source = this.#chunks.join("");
-    const code = Function(source);
+    this.#chunks = [];
+
+    const seen = new Set<PipelineTreeNode>();
+    this.#collectAll(this.#entrypoint, seen);
+    for (const node of seen) {
+      this.#emit(node);
+    }
+
+    const source =
+      '"use strict"; return function(runtime) { ' +
+      this.#chunks.join("") +
+      " }";
+
+    const code = new Function(source)();
 
     return {
-      injectInto: (runtime: EvaluationRuntime) => code.apply(runtime),
+      injectInto: (runtime: EvaluationRuntime) => code(runtime),
       source,
     };
   }
 
-  private emit(node: PipelineTreeNode, seen: Set<PipelineTreeNode>) {
-    seen.add(node);
-    this.emitFunctionStart(node);
-    this.emitDependencies(node);
-    this.emitInputAssignment(node);
-    this.emitExecutionAndOutput(node);
-    this.emitChildCalls(node, seen);
-    this.emitFunctionEnd(node);
+  #emit(node: PipelineTreeNode) {
+    this.#emitFunctionStart(node);
+    this.#emitDependencies(node);
+    this.#emitExecutionAndOutput(node);
+    this.#emitChildCalls(node);
+    this.#emitFunctionEnd(node);
   }
 
-  private emitFunctionStart(node: PipelineTreeNode) {
+  #emitFunctionStart(node: PipelineTreeNode) {
     this.#chunks.push(
-      "this.functions[",
+      "runtime.functions[",
       JSON.stringify(node.name),
       "] = async function* (c) {",
       "try {"
     );
   }
 
-  private emitDependencies(node: PipelineTreeNode) {
+  #emitDependencies(node: PipelineTreeNode) {
     for (const dependency of node.dependsOn) {
       if (typeof dependency !== "string") {
         const depNode = JSON.stringify(dependency.nodeName);
         const depOutput = JSON.stringify(dependency.outputName);
         this.#chunks.push(
-          `yield* this.functions[${depNode}].call(this, true);`
-        );
-        this.#chunks.push(
-          `if (this.outputs[${depNode}][${depOutput}] !== true) return;`
+          `yield* runtime.functions[${depNode}].call(runtime, true);`,
+          `if (runtime.outputs[${depNode}][${depOutput}] !== true) return;`
         );
       }
     }
   }
 
-  private emitInputAssignment(node: PipelineTreeNode) {
-    this.#chunks.push("const inputs = {};");
-    for (const [inputName, inputValue] of Object.entries(node.inputs)) {
-      const target = `inputs[${JSON.stringify(inputName)}] = `;
-      if (inputValue.type === "constant") {
-        this.#chunks.push(`${target}${JSON.stringify(inputValue.value)};`);
-      } else {
-        this.#chunks.push(
-          `${target}this.outputs[${JSON.stringify(
-            inputValue.nodeName
-          )}][${JSON.stringify(inputValue.outputName)}];`
-        );
-      }
-    }
-  }
-
-  private emitExecutionAndOutput(node: PipelineTreeNode) {
-    this.#chunks.push("yield;");
-
+  #emitExecutionAndOutput(node: PipelineTreeNode) {
     const nodeKey = JSON.stringify(node.node);
+    const nodeName = JSON.stringify(node.name);
 
     const libraryNode = this.#library[node.node];
-
     const inlineTemplate = getInlineTemplate(
       libraryNode.package,
       libraryNode.name
+    );
+
+    const hasOutputs = Object.keys(node.outputs).length > 0;
+
+    this.#chunks.push(`runtime.state[${nodeName}] = "pending";`);
+    this.#chunks.push(
+      `yield { node: ${nodeName}, event: ${JSON.stringify("start")} };`
     );
 
     if (inlineTemplate) {
       const transformed = inlineTemplate.replace(
         /\$([a-zA-Z_]\w*)/g,
         (_, name) => {
-          return `inputs[${JSON.stringify(name)}]`;
+          const input = node.inputs[name];
+          if (!input) return "undefined";
+          if (input.type === "constant") return JSON.stringify(input.value);
+          return `runtime.outputs[${JSON.stringify(
+            input.nodeName
+          )}][${JSON.stringify(input.outputName)}]`;
         }
       );
 
       this.#chunks.push(`const libraryOutput = ${transformed};`);
+
+      for (const [key, value] of Object.entries(node.outputs)) {
+        const outExpr = `libraryOutput[${JSON.stringify(key)}]`;
+        if (typeof value === "string") {
+          this.#chunks.push(
+            `runtime.outputs[${nodeName}] ??= {};`,
+            `runtime.outputs[${nodeName}][${JSON.stringify(
+              value
+            )}] = ${outExpr};`
+          );
+        } else {
+          this.#chunks.push(
+            `runtime.outputs[${JSON.stringify(value.nodeName)}] ??= {};`,
+            `runtime.outputs[${JSON.stringify(
+              value.nodeName
+            )}][${JSON.stringify(value.outputName)}] = ${outExpr};`
+          );
+        }
+      }
     } else {
-      this.#chunks.push(
-        `const libraryOutput = await this.library[${nodeKey}](inputs);`
-      );
-    }
+      this.#chunks.push("const inputs = {};");
+      for (const [inputName, inputValue] of Object.entries(node.inputs)) {
+        const target = `inputs[${JSON.stringify(inputName)}] = `;
+        if (inputValue.type === "constant") {
+          this.#chunks.push(`${target}${JSON.stringify(inputValue.value)};`);
+        } else {
+          this.#chunks.push(
+            `${target}runtime.outputs[${JSON.stringify(
+              inputValue.nodeName
+            )}][${JSON.stringify(inputValue.outputName)}];`
+          );
+        }
+      }
 
-    const outputTarget = JSON.stringify(node.name);
-    this.#chunks.push(`this.outputs[${outputTarget}] = {};`);
-
-    for (const [key, value] of Object.entries(node.outputs)) {
-      const resultKey = JSON.stringify(key);
-      if (typeof value === "string") {
+      if (hasOutputs) {
         this.#chunks.push(
-          `this.outputs[${outputTarget}][${JSON.stringify(
-            value
-          )}] = libraryOutput[${resultKey}];`
+          `const libraryOutput = await runtime.library[${nodeKey}](inputs);`
         );
+        this.#chunks.push(`runtime.outputs[${nodeName}] = {};`);
+        for (const [key, value] of Object.entries(node.outputs)) {
+          const resultKey = JSON.stringify(key);
+          if (typeof value === "string") {
+            this.#chunks.push(
+              `runtime.outputs[${nodeName}][${JSON.stringify(
+                value
+              )}] = libraryOutput[${resultKey}];`
+            );
+          } else {
+            this.#chunks.push(
+              `runtime.outputs[${JSON.stringify(
+                value.nodeName
+              )}][${JSON.stringify(
+                value.outputName
+              )}] = libraryOutput[${resultKey}];`
+            );
+          }
+        }
       } else {
-        this.#chunks.push(
-          `this.outputs[${JSON.stringify(value.nodeName)}][${JSON.stringify(
-            value.outputName
-          )}] = libraryOutput[${resultKey}];`
-        );
+        this.#chunks.push(`await runtime.library[${nodeKey}](inputs);`);
       }
     }
 
-    this.#chunks.push(`this.state[${JSON.stringify(node.name)}] = "complete";`);
+    this.#chunks.push(`runtime.state[${nodeName}] = "complete";`);
+    this.#chunks.push(
+      `yield { node: ${nodeName}, event: ${JSON.stringify("function-end")} };`
+    );
   }
 
-  private emitChildCalls(node: PipelineTreeNode, seen: Set<PipelineTreeNode>) {
+  #emitChildCalls(node: PipelineTreeNode) {
     for (const child of node.children) {
-      if (!seen.has(child)) {
-        this.emit(child, new Set(seen));
-      }
+      const parentName = JSON.stringify(node.name);
+      const childName = JSON.stringify(child.name);
       this.#chunks.push(
-        `if (!c) yield* this.functions[${JSON.stringify(
-          child.name
-        )}].call(this);`
+        `if (!c) {`,
+        `  yield { node: ${parentName}, event: "child-start", child: ${childName} };`,
+        `  yield* runtime.functions[${childName}].call(runtime);`,
+        `  yield { node: ${parentName}, event: "child-end", child: ${childName} };`,
+        `}`
       );
     }
   }
-
-  private emitFunctionEnd(node: PipelineTreeNode) {
+  #emitFunctionEnd(node: PipelineTreeNode) {
+    this.#chunks.push(
+      `yield { node: ${JSON.stringify(node.name)}, event: ${JSON.stringify(
+        "end"
+      )} };`
+    );
     this.#chunks.push(
       `} catch (e) {`,
-      `  this.state[${JSON.stringify(node.name)}] = "error";`,
-      `  this.error = e;`,
+      `  runtime.state[${JSON.stringify(node.name)}] = "error";`,
+      `  runtime.error = e;`,
+      `  yield { node: ${JSON.stringify(
+        node.name
+      )}, event: "error", error: e };`,
       `  return;`,
       `}`,
       "};"
