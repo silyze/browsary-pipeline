@@ -59,28 +59,28 @@ const pipelineSource: Record<string, GenericNode> = {
   },
 };
 
+const logger = new (class extends Logger {
+  log<T>(severity: LogSeverity, _area: string, message: string): void {
+    if (severity === "debug") return;
+    if (severity === "error" || severity === "fatal") {
+      console.error(message);
+    }
+    if (severity === "warn") {
+      console.warn(message);
+    }
+    if (severity === "info") {
+      console.log(message);
+    }
+  }
+  createScope(): Logger {
+    return this;
+  }
+})();
+
 async function main() {
   const compiler = new PipelineCompiler();
   const result = compiler.compile(pipelineSource);
   if (hasPipeline(result)) {
-    const logger = new (class extends Logger {
-      log<T>(severity: LogSeverity, _area: string, message: string): void {
-        if (severity === "debug") return;
-        if (severity === "error" || severity === "fatal") {
-          console.error(message);
-        }
-        if (severity === "warn") {
-          console.warn(message);
-        }
-        if (severity === "info") {
-          console.log(message);
-        }
-      }
-      createScope(): Logger {
-        return this;
-      }
-    })();
-
     const evaluation = result.pipeline.createEvaluation({
       logger,
       browserProvider: NullBrowserProvider.default,
