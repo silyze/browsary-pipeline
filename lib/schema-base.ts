@@ -1,4 +1,137 @@
+import { assertNonNull } from "@mojsoski/assert";
+import { EvaluationPackage, PackageName, createLibrary } from "./library";
+import {
+  EvaluationConfig,
+  EvaluationLibraryProvider,
+  EvaluationNode,
+} from "./evaluation";
 export const RefType = Symbol("RefType");
+
+export type NodeMetadata = {
+  title?: string;
+  description?: string;
+  inputs: {
+    name: string;
+    type: object | null;
+    refType: string;
+  }[];
+  outputs: { name: string; refType: string }[];
+};
+
+export type SchemaMetadata = {
+  nodes: {
+    [k: string]: NodeMetadata;
+  };
+};
+
+export function inferLibrary(
+  ...packageConstructors: (new (
+    config: EvaluationConfig
+  ) => EvaluationPackage<string>)[]
+) {
+  return packageConstructors.map(infer).flat();
+}
+
+export function infer<
+  T extends new (config: EvaluationConfig) => EvaluationPackage<string>
+>(constructor: T) {
+  const pkg: EvaluationPackage<string> & Partial<{ __schema: SchemaMetadata }> =
+    new constructor({} as EvaluationConfig);
+
+  assertNonNull(pkg.__schema, "package.__schema");
+
+  return Object.entries(pkg.__schema.nodes).map(([action, meta]) =>
+    nodeSchema({
+      prefix: pkg[PackageName],
+      action,
+      title: meta.title ?? "No title",
+      description: meta.description,
+      inputs: meta.inputs,
+      outputs: meta.outputs,
+    })
+  );
+}
+
+export function input<T extends EvaluationPackage<string>>(
+  name: string,
+  refType: string,
+  type?: object
+): (target: T, propertyKey: string) => void {
+  return (target, propertyKey) => {
+    const schemaMetadata: SchemaMetadata = ((target as any)["__schema"] ??= {
+      nodes: {},
+    });
+    const nodeMetadata = (schemaMetadata.nodes[propertyKey] ??= {
+      inputs: [],
+      outputs: [],
+    });
+
+    const descriptor = typeDescriptor[refType as keyof typeof typeDescriptor];
+
+    if (!type && descriptor) {
+      if (typeof descriptor === "string") {
+        type = { type: descriptor };
+      } else {
+        type = { enum: descriptor };
+      }
+    }
+
+    nodeMetadata.inputs.push({
+      name,
+      type: type ?? null,
+      refType,
+    });
+  };
+}
+
+export function output<T extends EvaluationPackage<string>>(
+  name: string,
+  refType: string
+): (target: T, propertyKey: string) => void {
+  return (target, propertyKey) => {
+    const schemaMetadata: SchemaMetadata = ((target as any)["__schema"] ??= {
+      nodes: {},
+    });
+    const nodeMetadata = (schemaMetadata.nodes[propertyKey] ??= {
+      inputs: [],
+      outputs: [],
+    });
+
+    nodeMetadata.outputs.push({ name, refType });
+  };
+}
+
+export function title<T extends EvaluationPackage<string>>(
+  title: string
+): (target: T, propertyKey: string) => void {
+  return (target, propertyKey) => {
+    const schemaMetadata: SchemaMetadata = ((target as any)["__schema"] ??= {
+      nodes: {},
+    });
+    const nodeMetadata = (schemaMetadata.nodes[propertyKey] ??= {
+      inputs: [],
+      outputs: [],
+    });
+
+    nodeMetadata.title = title;
+  };
+}
+
+export function description<T extends EvaluationPackage<string>>(
+  description: string
+): (target: T, propertyKey: string) => void {
+  return (target, propertyKey) => {
+    const schemaMetadata: SchemaMetadata = ((target as any)["__schema"] ??= {
+      nodes: {},
+    });
+    const nodeMetadata = (schemaMetadata.nodes[propertyKey] ??= {
+      inputs: [],
+      outputs: [],
+    });
+
+    nodeMetadata.description = description;
+  };
+}
 
 export function inputSchema<T extends object | null>(type: T, refType: string) {
   const baseOutputOf = {
