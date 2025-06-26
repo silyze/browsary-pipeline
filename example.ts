@@ -15,73 +15,77 @@ import {
 } from "@silyze/browsary-ai-provider";
 import type { Pipeline } from "@silyze/browsary-pipeline";
 const pipelineSource: Record<string, GenericNode> = {
-  check: {
-    node: "logic::greaterThan",
-    inputs: {
-      a: {
-        type: "outputOf",
-        nodeName: "counter",
-        outputName: "value2",
-      },
-      b: {
-        type: "constant",
-        value: 0,
-      },
-    },
+  create: {
+    node: "list::create",
+    inputs: {},
     outputs: {
-      result: "result2",
-    },
-    dependsOn: ["counter", "decrement_counter"],
-  },
-  counter: {
-    node: "declare::number",
-    inputs: {
-      value: {
-        type: "constant",
-        value: 10,
-      },
-    },
-    outputs: {
-      value: "value2",
+      value: "value",
     },
     dependsOn: [],
   },
-  loop: {
-    node: "log::info",
+
+  add_a: {
+    node: "list::add",
     inputs: {
-      value: {
+      list: {
+        type: "outputOf",
+        nodeName: "create",
+        outputName: "value",
+      },
+      item: {
         type: "constant",
-        value: "Test",
+        value: "a",
       },
     },
     outputs: {},
-    dependsOn: [
-      {
-        nodeName: "check",
-        outputName: "result2",
-      },
-    ],
+    dependsOn: ["create"],
   },
-  decrement_counter: {
-    node: "logic::subtract",
+
+  add_2: {
+    node: "list::add",
     inputs: {
-      a: {
+      list: {
         type: "outputOf",
-        nodeName: "counter",
-        outputName: "value2",
+        nodeName: "create",
+        outputName: "value",
       },
-      b: {
+      item: {
         type: "constant",
-        value: 1,
+        value: 2,
       },
     },
+    outputs: {},
+    dependsOn: ["add_a"],
+  },
+  join: {
+    node: "list::join",
     outputs: {
-      result: {
-        nodeName: "counter",
-        outputName: "value2",
+      value: "value",
+    },
+    inputs: {
+      list: {
+        type: "outputOf",
+        nodeName: "create",
+        outputName: "value",
+      },
+      separator: {
+        type: "constant",
+        value: ";",
       },
     },
-    dependsOn: ["loop"],
+    dependsOn: ["add_2"],
+  },
+  log: {
+    node: "log::info",
+    outputs: {},
+    inputs: {
+      value: {
+        type: "outputOf",
+        nodeName: "join",
+        outputName: "value",
+      },
+    },
+    dependsOn: ["join"],
   },
 };
 

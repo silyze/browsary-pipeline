@@ -196,20 +196,20 @@ function resolveOutputReference(
   return undefined;
 }
 
-function schemaRefType(schema: object) {
-  let ref = schema as { [RefType]: string | undefined };
+function schemaRefType(schema: object): string {
+  let ref = schema as { [RefType]?: string };
   if ("anyOf" in ref) {
-    const anyOf = ref.anyOf as (
-      | { type: "string"; [RefType]: string | undefined }
-      | { type: "object" }
-    )[];
-    ref = anyOf.find((item) => item.type === "string")!;
+    const anyOf = ref.anyOf as object[];
+    ref = anyOf.find((item) => (item as any).type === "string") as any;
   }
-  assertType(ref[RefType], "string", "RefType");
-  return ref[RefType];
+
+  if (!ref || !ref[RefType]) return "any";
+  return ref[RefType]!;
 }
 
 function describeType(type: string) {
+  if (type === "any") return "any";
+
   if (type in typeDescriptor) {
     return typeDescriptor[type as keyof typeof typeDescriptor];
   }
@@ -778,8 +778,13 @@ export class PipelineCompiler extends PipelineProvider {
                       break;
                     }
 
+                    const inputType = schemaRefType(outputOfDef);
+                    const outputTypeStr = schemaRefType(outputType);
+
                     if (
-                      schemaRefType(outputType) !== schemaRefType(outputOfDef)
+                      inputType !== "any" &&
+                      outputTypeStr !== "any" &&
+                      inputType !== outputTypeStr
                     ) {
                       errors.push({
                         type: "ref-input-type-mismatch",
@@ -861,7 +866,10 @@ export class PipelineCompiler extends PipelineProvider {
                         "The constant input schema is missing or invalid",
                     });
                   } else {
-                    const validateConstant = ajv.compile(valueSchema);
+                    const isAnySchema = Object.keys(valueSchema).length === 0;
+                    const validateConstant = isAnySchema
+                      ? () => true
+                      : ajv.compile(valueSchema);
 
                     if (!validateConstant(check.input.value)) {
                       errors.push({
@@ -877,7 +885,7 @@ export class PipelineCompiler extends PipelineProvider {
                     }
                   }
                 }
-              } else {
+              } else if (schemaRefType(inputType.properties) !== "any") {
                 errors.push({
                   type: "node-type-input-no-const",
                   nodeName: check.nodeName,
@@ -989,8 +997,12 @@ export class PipelineCompiler extends PipelineProvider {
 
           const selfType = schemaRefType(outputRefSelfSchema);
           const targetType = schemaRefType(outputRefTargetOutputSchema);
+          const typesMatch =
+            selfType === "any" ||
+            targetType === "any" ||
+            selfType === targetType;
 
-          if (selfType !== targetType) {
+          if (!typesMatch) {
             errors.push({
               type: "output-ref-type-mismatch",
               nodeName: check.nodeName,

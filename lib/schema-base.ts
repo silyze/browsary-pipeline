@@ -67,8 +67,10 @@ export function input<T extends EvaluationPackage<string>>(
     if (!type && descriptor) {
       if (typeof descriptor === "string") {
         type = { type: descriptor };
-      } else {
+      } else if (Array.isArray(descriptor)) {
         type = { enum: descriptor };
+      } else if (descriptor === null) {
+        type = null!;
       }
     }
 
@@ -149,6 +151,10 @@ export function inputSchema<T extends object | null>(type: T, refType: string) {
     additionalProperties: false,
   };
 
+  if (type === null) {
+    return baseOutputOf;
+  }
+
   const constant = {
     type: "object",
     properties: {
@@ -162,15 +168,10 @@ export function inputSchema<T extends object | null>(type: T, refType: string) {
     additionalProperties: false,
   };
 
-  if (type === null) {
-    return baseOutputOf;
-  }
-
   return {
     anyOf: [baseOutputOf, constant],
   } as const;
 }
-
 export const stringInputType = {
   type: "string",
 } as const;
@@ -193,10 +194,10 @@ export const waitEventType = {
 export const typeDescriptor = {
   waitEventType: waitEventType.enum,
   modelType: modelType.enum,
-
   number: numberType.type,
   boolean: booleanInputType.type,
   string: stringInputType.type,
+  any: null,
 };
 
 export function nodeSchema<
