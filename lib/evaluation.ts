@@ -121,7 +121,7 @@ export class Pipeline {
 type PipelineThreadState =
   | {
       status: "pending";
-      promise: Promise<void>;
+      process: AsyncGenerator<PipelineNodeEvent>;
     }
   | {
       status: "error";
@@ -137,12 +137,12 @@ export type EvaluationRuntime = {
     (doNotRunChildren?: boolean) => AsyncGenerator<PipelineNodeEvent>
   >;
   outputs: Record<string, Record<string, any>>;
-  assert: (value: unknown, message?: string) => asserts value;
   state: Record<string, "complete" | "pending" | "error">;
   library: Record<
     string,
     (inputs: Record<string, unknown>) => Promise<Record<string, unknown>>
   >;
+  context: EvaluationNodeContext;
 };
 
 type PipelineThread = {
@@ -152,7 +152,34 @@ type PipelineThread = {
 
 export async function waitForPipelineThread(thread: PipelineThread) {
   if (thread.state.status === "pending") {
-    await thread.state.promise;
+    thread.runtime.context.logger.log(
+      "debug",
+      "start",
+      "Starting pipeline thread execution"
+    );
+    try {
+      await runPipelineProcess(
+        thread.runtime.context.logger,
+        thread.state.process,
+        thread.runtime.context.gc
+      );
+      thread.state = { status: "complete" };
+      thread.runtime.context.logger.log(
+        "debug",
+        "status",
+        "Thread marked complete"
+      );
+    } catch (error) {
+      thread.state = { status: "error", error };
+      thread.runtime.context.logger.log(
+        "error",
+        "status",
+        "Thread marked error",
+        createErrorObject(error)
+      );
+      throw error;
+    }
+
     return;
   }
   if (thread.state.status === "error") {
@@ -166,7 +193,7 @@ export async function waitForPipelineThread(thread: PipelineThread) {
   assert(false, "Unreachable code reached");
 }
 
-async function runPipelineGenerator(
+async function runPipelineProcess(
   logger: Logger,
   generator: AsyncGenerator<PipelineNodeEvent>,
   gc: EvaluationGC,
@@ -253,60 +280,50 @@ export class PipelineEvaluation {
       runtime,
       state: {
         status: "pending",
-        promise: Promise.resolve(),
+        process: gen,
       },
     };
 
-    threadLogger.log("debug", "start", "Starting pipeline thread execution");
-
-    assert(thread.state.status === "pending");
-    thread.state.promise = (async () => {
-      try {
-        await runPipelineGenerator(threadLogger, gen, gc, signal);
-        thread.state = { status: "complete" };
-        threadLogger.log("debug", "status", "Thread marked complete");
-      } catch (error) {
-        thread.state = { status: "error", error };
-        threadLogger.log(
-          "error",
-          "status",
-          "Thread marked error",
-          createErrorObject(error)
-        );
-        throw error;
-      }
-    })();
-
     return thread;
+  }
+
+  #createContext(
+    gc: EvaluationGC,
+    runtime: Partial<EvaluationRuntime>,
+    signal?: AbortSignal
+  ): EvaluationNodeContext {
+    return {
+      gc,
+      signal,
+      runtime: runtime as EvaluationRuntime,
+      logger: this.#logger.createScope("runtime"),
+    };
   }
 
   #createRuntime(gc: EvaluationGC, signal?: AbortSignal): EvaluationRuntime {
     const runtimeLogger = this.#logger.createScope("runtime");
     runtimeLogger.log("debug", "init", "Creating evaluation runtime");
-
-    const runtime: EvaluationRuntime = {
+    const runtime: Partial<EvaluationRuntime> = {
       functions: {},
       state: {},
-      assert(value, message) {
-        assert(value, message);
-      },
       outputs: {},
-      library: Object.fromEntries(
-        Object.entries(this.#library).map(([name, fn]) => [
-          name,
-          (input) =>
-            fn(input, {
-              gc,
-              logger: this.#logger.createScope(name),
-              signal,
-              runtime,
-            }),
-        ])
-      ),
     };
 
+    const context = this.#createContext(gc, runtime, signal);
+
+    runtime.context = context;
+    runtime.library = Object.fromEntries(
+      Object.entries(this.#library).map(([name, fn]) => [
+        name,
+        (input) =>
+          fn(input, {
+            ...context,
+            logger: this.#logger.createScope(name),
+          }),
+      ])
+    );
     runtimeLogger.log("debug", "init", "Runtime created");
-    return runtime;
+    return runtime as EvaluationRuntime;
   }
 
   async *evaluate(signal?: AbortSignal): AsyncGenerator<PipelineThread> {
