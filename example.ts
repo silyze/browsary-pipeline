@@ -8,8 +8,25 @@ import {
 } from "./lib";
 import { NullBrowserProvider } from "@silyze/browser-provider";
 const pipelineSource: Record<string, GenericNode> = {
+  check: {
+    node: "logic::greaterThan",
+    inputs: {
+      a: {
+        type: "outputOf",
+        nodeName: "counter",
+        outputName: "value2",
+      },
+      b: {
+        type: "constant",
+        value: 0,
+      },
+    },
+    outputs: {
+      result: "result2",
+    },
+    dependsOn: ["counter", "decrement_counter"],
+  },
   counter: {
-    dependsOn: [],
     node: "declare::number",
     inputs: {
       value: {
@@ -17,26 +34,12 @@ const pipelineSource: Record<string, GenericNode> = {
         value: 10,
       },
     },
-    outputs: { value: "value" },
-  },
-
-  check: {
-    dependsOn: "counter",
-    node: "logic::greaterThan",
-    inputs: {
-      a: {
-        type: "outputOf",
-        nodeName: "counter",
-        outputName: "value",
-      },
-      b: { type: "constant", value: 0 },
-    },
     outputs: {
-      result: "result",
+      value: "value2",
     },
+    dependsOn: [],
   },
   loop: {
-    dependsOn: [{ nodeName: "check", outputName: "result" }, "decrement"],
     node: "log::info",
     inputs: {
       value: {
@@ -45,17 +48,33 @@ const pipelineSource: Record<string, GenericNode> = {
       },
     },
     outputs: {},
+    dependsOn: [
+      {
+        nodeName: "check",
+        outputName: "result2",
+      },
+    ],
   },
-  decrement: {
-    dependsOn: "loop",
+  decrement_counter: {
     node: "logic::subtract",
     inputs: {
-      a: { type: "outputOf", nodeName: "counter", outputName: "value" },
-      b: { type: "constant", value: 1 },
+      a: {
+        type: "outputOf",
+        nodeName: "counter",
+        outputName: "value2",
+      },
+      b: {
+        type: "constant",
+        value: 1,
+      },
     },
     outputs: {
-      result: { nodeName: "counter", outputName: "value" },
+      result: {
+        nodeName: "counter",
+        outputName: "value2",
+      },
     },
+    dependsOn: ["loop"],
   },
 };
 

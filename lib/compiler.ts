@@ -579,7 +579,9 @@ export class PipelineCompiler extends PipelineProvider {
       if (typeof dep !== "string") {
         const targetNode = basePipeline[dep.nodeName];
         if (targetNode) {
-          const output = targetNode.outputs[dep.outputName];
+          const output = Object.entries(targetNode.outputs)
+            .find((item) => item[1] === dep.outputName)
+            ?.at(0);
 
           if (typeof output !== "string") {
             errors.push({

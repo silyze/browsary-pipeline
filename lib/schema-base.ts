@@ -46,8 +46,8 @@ export function infer<
       action,
       title: meta.title ?? "No title",
       description: meta.description,
-      inputs: meta.inputs,
-      outputs: meta.outputs,
+      inputs: meta.inputs.toReversed(),
+      outputs: meta.outputs.toReversed(),
     })
   );
 }
