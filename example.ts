@@ -15,48 +15,6 @@ import {
 } from "@silyze/browsary-ai-provider";
 import type { Pipeline } from "@silyze/browsary-pipeline";
 const pipelineSource: Record<string, GenericNode> = {
-  create: {
-    node: "list::create",
-    inputs: {},
-    outputs: {
-      value: "value",
-    },
-    dependsOn: [],
-  },
-
-  add_a: {
-    node: "list::add",
-    inputs: {
-      list: {
-        type: "outputOf",
-        nodeName: "create",
-        outputName: "value",
-      },
-      item: {
-        type: "constant",
-        value: "a",
-      },
-    },
-    outputs: {},
-    dependsOn: ["create"],
-  },
-
-  add_2: {
-    node: "list::add",
-    inputs: {
-      list: {
-        type: "outputOf",
-        nodeName: "create",
-        outputName: "value",
-      },
-      item: {
-        type: "constant",
-        value: 2,
-      },
-    },
-    outputs: {},
-    dependsOn: ["add_a"],
-  },
   join: {
     node: "list::join",
     outputs: {
@@ -64,16 +22,15 @@ const pipelineSource: Record<string, GenericNode> = {
     },
     inputs: {
       list: {
-        type: "outputOf",
-        nodeName: "create",
-        outputName: "value",
+        type: "constant",
+        value: ["a", 2],
       },
       separator: {
         type: "constant",
         value: ";",
       },
     },
-    dependsOn: ["add_2"],
+    dependsOn: [],
   },
   log: {
     node: "log::info",

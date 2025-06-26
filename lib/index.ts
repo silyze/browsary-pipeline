@@ -36,6 +36,8 @@ import {
   typeDescriptor,
   waitEventType,
   modelType,
+  objectType,
+  listType,
 } from "./schema";
 
 export {
@@ -57,6 +59,8 @@ export {
   numberType,
   waitEventType,
   modelType,
+  listType,
+  objectType,
   typeDescriptor,
 };
 

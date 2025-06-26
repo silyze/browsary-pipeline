@@ -7,6 +7,8 @@ import {
   typeDescriptor,
   waitEventType,
   modelType,
+  listType,
+  objectType,
 } from "./schema-base";
 import { standardLibrarySchema } from "./nodes";
 
@@ -18,6 +20,8 @@ export {
   waitEventType,
   typeDescriptor,
   modelType,
+  listType,
+  objectType,
 };
 
 export const pipelineSchema = {

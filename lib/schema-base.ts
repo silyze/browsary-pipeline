@@ -187,6 +187,17 @@ export const numberType = {
 export const modelType = {
   enum: ["gpt-4o-mini"],
 };
+
+export const listType = {
+  type: "array",
+  items: {},
+} as const;
+
+export const objectType = {
+  type: "object",
+  additionalProperties: true,
+} as const;
+
 export const waitEventType = {
   enum: ["load", "domcontentloaded", "networkidle0", "networkidle2"],
 } as const;
@@ -198,6 +209,8 @@ export const typeDescriptor = {
   boolean: booleanInputType.type,
   string: stringInputType.type,
   any: null,
+  list: listType.type,
+  object: objectType.type,
 };
 
 export function nodeSchema<
