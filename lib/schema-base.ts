@@ -183,12 +183,17 @@ export const numberType = {
   type: "number",
 } as const;
 
+export const modelType = {
+  enum: ["gpt-4o-mini"],
+};
 export const waitEventType = {
   enum: ["load", "domcontentloaded", "networkidle0", "networkidle2"],
 } as const;
 
 export const typeDescriptor = {
   waitEventType: waitEventType.enum,
+  modelType: modelType.enum,
+
   number: numberType.type,
   boolean: booleanInputType.type,
   string: stringInputType.type,

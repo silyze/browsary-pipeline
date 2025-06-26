@@ -8,7 +8,7 @@ export default class AiPackage extends EvaluationPackage<"ai"> {
 
   @title("AI Prompt")
   @description("Prompt an AI model")
-  @input("model", "model", { enum: ["gpt-4o-mini"] })
+  @input("model", "modelType")
   @input("prompt", "string")
   @input("instructions", "string")
   @output("response", "string")

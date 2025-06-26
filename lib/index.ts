@@ -35,6 +35,7 @@ import {
   stringInputType,
   typeDescriptor,
   waitEventType,
+  modelType,
 } from "./schema";
 
 export {
@@ -55,6 +56,7 @@ export {
   booleanInputType,
   numberType,
   waitEventType,
+  modelType,
   typeDescriptor,
 };
 
