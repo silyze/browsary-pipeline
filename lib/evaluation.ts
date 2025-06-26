@@ -3,6 +3,7 @@ import { BrowserProvider, ViewportConfig } from "@silyze/browser-provider";
 import { Logger, createErrorObject } from "@silyze/logger";
 import { PipelineTreeJIT } from "./jit";
 import { EvaluationPackage } from "./library";
+import { AiProvider } from "@silyze/browsary-ai-provider";
 
 export type InputNode =
   | { type: "outputOf"; nodeName: string; outputName: string }
@@ -49,6 +50,7 @@ export type EvaluationLibraryProvider = (
 export type EvaluationConfig = {
   logger: Logger;
   browserProvider: BrowserProvider;
+  aiProvider: AiProvider<unknown, unknown>;
   libraryProvider: EvaluationLibraryProvider;
   viewport?: ViewportConfig;
 };

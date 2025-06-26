@@ -7,6 +7,13 @@ import {
   waitForPipelineThread,
 } from "./lib";
 import { NullBrowserProvider } from "@silyze/browser-provider";
+import {
+  AiModel,
+  AiProvider,
+  AiResult,
+  AnalysisResult,
+} from "@silyze/browsary-ai-provider";
+import type { Pipeline } from "@silyze/browsary-pipeline";
 const pipelineSource: Record<string, GenericNode> = {
   check: {
     node: "logic::greaterThan",
@@ -96,12 +103,37 @@ const logger = new (class extends Logger {
   }
 })();
 
+class NullModel extends AiModel<object> {
+  prompt(): Promise<AiResult<string>> {
+    throw new Error("Method not implemented.");
+  }
+  promptWithSchema<T>(): Promise<AiResult<T>> {
+    throw new Error("Method not implemented.");
+  }
+}
+
+class NullAiProvider extends AiProvider<unknown, unknown> {
+  constructor() {
+    super(null!, null!);
+  }
+  createModel<TModelContext>(): AiModel<TModelContext> {
+    return new NullModel();
+  }
+  analyze(): Promise<AiResult<AnalysisResult>> {
+    throw new Error("Method not implemented.");
+  }
+  generate(): Promise<AiResult<Pipeline>> {
+    throw new Error("Method not implemented.");
+  }
+}
+
 async function main() {
   const compiler = new PipelineCompiler();
   const result = compiler.compile(pipelineSource);
   if (hasPipeline(result)) {
     const evaluation = result.pipeline.createEvaluation({
       logger,
+      aiProvider: new NullAiProvider(),
       browserProvider: NullBrowserProvider.default,
       libraryProvider: StandardLibraryProvider,
       viewport: {
