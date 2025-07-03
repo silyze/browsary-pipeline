@@ -49,7 +49,16 @@ export const genericNodeSchema = {
               type: "object",
               properties: {
                 type: { const: "constant" },
-                value: {},
+                value: {
+                  anyOf: [
+                    { type: "string" },
+                    { type: "number" },
+                    { type: "boolean" },
+                    { type: "object" },
+                    { type: "array" },
+                    { type: "null" },
+                  ],
+                },
               },
               required: ["type", "value"],
               additionalProperties: false,
