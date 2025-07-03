@@ -33,6 +33,7 @@ export const pipelineSchema = {
 } as const;
 
 export const genericNodeSchema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
   type: "object",
   properties: {},
   additionalProperties: {
@@ -64,6 +65,7 @@ export const genericNodeSchema = {
             },
           ],
         },
+        required: [],
       },
       outputs: {
         type: "object",
@@ -81,6 +83,7 @@ export const genericNodeSchema = {
             },
           ],
         },
+        required: [],
       },
       dependsOn: {
         anyOf: [
@@ -137,5 +140,4 @@ export const genericNodeSchema = {
     },
   },
 } as const;
-
 export type PipelineSchema = JTDDataType<typeof genericNodeSchema>;
