@@ -37,89 +37,9 @@ export const genericNodeSchema = {
   type: "object",
   properties: {},
   additionalProperties: {
-    type: "object",
-    properties: {
-      node: { type: "string" },
-      inputs: {
-        type: "object",
-        additionalProperties: {
-          anyOf: [
-            {
-              type: "object",
-              properties: {
-                type: { type: "string", const: "constant" },
-                value: { $ref: "#/$defs/JsonValue" },
-              },
-              required: [],
-              additionalProperties: false,
-            },
-            {
-              type: "object",
-              properties: {
-                type: { type: "string", const: "outputOf" },
-                nodeName: { type: "string" },
-                outputName: { type: "string" },
-              },
-              required: [],
-              additionalProperties: false,
-            },
-          ],
-        },
-        required: [],
-      },
-      outputs: {
-        type: "object",
-        additionalProperties: {
-          anyOf: [
-            { type: "string" },
-            {
-              type: "object",
-              properties: {
-                nodeName: { type: "string" },
-                outputName: { type: "string" },
-              },
-              required: [],
-              additionalProperties: false,
-            },
-          ],
-        },
-        required: [],
-      },
-      dependsOn: {
-        anyOf: [
-          { type: "string" },
-          {
-            type: "object",
-            properties: {
-              nodeName: { type: "string" },
-              outputName: { type: "string" },
-            },
-            required: [],
-            additionalProperties: false,
-          },
-          {
-            type: "array",
-            items: {
-              anyOf: [
-                { type: "string" },
-                {
-                  type: "object",
-                  properties: {
-                    nodeName: { type: "string" },
-                    outputName: { type: "string" },
-                  },
-                  required: [],
-                  additionalProperties: false,
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    required: [],
-    additionalProperties: false,
+    $ref: "#/$defs/GenericNode",
   },
+  required: [],
   $defs: {
     JsonValue: {
       anyOf: [
@@ -130,6 +50,7 @@ export const genericNodeSchema = {
         {
           type: "object",
           additionalProperties: { $ref: "#/$defs/JsonValue" },
+          required: [],
         },
         {
           type: "array",
@@ -137,6 +58,84 @@ export const genericNodeSchema = {
           additionalItems: false,
         },
       ],
+    },
+    InputNode: {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            type: { type: "string", const: "constant" },
+            value: { $ref: "#/$defs/JsonValue" },
+          },
+          required: ["type", "value"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            type: { type: "string", const: "outputOf" },
+            nodeName: { type: "string" },
+            outputName: { type: "string" },
+          },
+          required: ["type", "nodeName", "outputName"],
+          additionalProperties: false,
+        },
+      ],
+    },
+    Output: {
+      anyOf: [
+        { type: "string" },
+        {
+          type: "object",
+          properties: {
+            nodeName: { type: "string" },
+            outputName: { type: "string" },
+          },
+          required: ["nodeName", "outputName"],
+          additionalProperties: false,
+        },
+      ],
+    },
+    Dependency: {
+      anyOf: [
+        { type: "string" },
+        {
+          type: "object",
+          properties: {
+            nodeName: { type: "string" },
+            outputName: { type: "string" },
+          },
+          required: ["nodeName", "outputName"],
+          additionalProperties: false,
+        },
+      ],
+    },
+    GenericNode: {
+      type: "object",
+      properties: {
+        node: { type: "string", pattern: "^[^:]+::[^:]+$" },
+        inputs: {
+          type: "object",
+          additionalProperties: { $ref: "#/$defs/InputNode" },
+          required: [],
+        },
+        outputs: {
+          type: "object",
+          additionalProperties: { $ref: "#/$defs/Output" },
+          required: [],
+        },
+        dependsOn: {
+          anyOf: [
+            { $ref: "#/$defs/Dependency" },
+            {
+              type: "array",
+              items: { $ref: "#/$defs/Dependency" },
+            },
+          ],
+        },
+      },
+      required: ["node", "inputs", "outputs", "dependsOn"],
+      additionalProperties: false,
     },
   },
 } as const;
