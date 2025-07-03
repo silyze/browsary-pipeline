@@ -47,16 +47,7 @@ export const genericNodeSchema = {
               type: "object",
               properties: {
                 type: { type: "string", const: "constant" },
-                value: {
-                  anyOf: [
-                    { type: "string" },
-                    { type: "number" },
-                    { type: "boolean" },
-                    { type: "object" },
-                    { type: "array" },
-                    { type: "null" },
-                  ],
-                },
+                value: { $ref: "#/$defs/JsonValue" },
               },
               required: ["type", "value"],
               additionalProperties: false,
@@ -125,6 +116,25 @@ export const genericNodeSchema = {
     },
     required: ["node", "inputs", "outputs", "dependsOn"],
     additionalProperties: false,
+  },
+  $defs: {
+    JsonValue: {
+      anyOf: [
+        { type: "string" },
+        { type: "number" },
+        { type: "boolean" },
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: { $ref: "#/$defs/JsonValue" },
+        },
+        {
+          type: "array",
+          items: { $ref: "#/$defs/JsonValue" },
+          additionalItems: false,
+        },
+      ],
+    },
   },
 } as const;
 
