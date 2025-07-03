@@ -31,15 +31,12 @@ export const pipelineSchema = {
     anyOf: [...standardLibrarySchema],
   },
 } as const;
-
 export const genericNodeSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   type: "object",
-  properties: {},
   additionalProperties: {
     $ref: "#/$defs/GenericNode",
   },
-  required: [],
   $defs: {
     JsonValue: {
       anyOf: [
@@ -50,7 +47,6 @@ export const genericNodeSchema = {
         {
           type: "object",
           additionalProperties: { $ref: "#/$defs/JsonValue" },
-          required: [],
         },
         {
           type: "array",
@@ -117,12 +113,10 @@ export const genericNodeSchema = {
         inputs: {
           type: "object",
           additionalProperties: { $ref: "#/$defs/InputNode" },
-          required: [],
         },
         outputs: {
           type: "object",
           additionalProperties: { $ref: "#/$defs/Output" },
-          required: [],
         },
         dependsOn: {
           anyOf: [
