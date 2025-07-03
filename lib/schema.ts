@@ -38,9 +38,7 @@ export const genericNodeSchema = {
   additionalProperties: {
     type: "object",
     properties: {
-      node: {
-        type: "string",
-      },
+      node: { type: "string" },
       inputs: {
         type: "object",
         additionalProperties: {
@@ -48,7 +46,7 @@ export const genericNodeSchema = {
             {
               type: "object",
               properties: {
-                type: { const: "constant" },
+                type: { type: "string", const: "constant" },
                 value: {
                   anyOf: [
                     { type: "string" },
@@ -66,7 +64,7 @@ export const genericNodeSchema = {
             {
               type: "object",
               properties: {
-                type: { const: "outputOf" },
+                type: { type: "string", const: "outputOf" },
                 nodeName: { type: "string" },
                 outputName: { type: "string" },
               },
