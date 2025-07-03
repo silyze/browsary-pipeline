@@ -34,6 +34,7 @@ export const pipelineSchema = {
 export const genericNodeSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   type: "object",
+  properties: {},
   additionalProperties: {
     $ref: "#/$defs/GenericNode",
   },
