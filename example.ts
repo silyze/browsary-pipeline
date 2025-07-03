@@ -15,34 +15,61 @@ import {
 } from "@silyze/browsary-ai-provider";
 import type { Pipeline } from "@silyze/browsary-pipeline";
 const pipelineSource: Record<string, GenericNode> = {
-  join: {
-    node: "list::join",
-    outputs: {
-      value: "value",
-    },
+  counter: {
+    node: "declare::number",
     inputs: {
-      list: {
-        type: "constant",
-        value: ["a", 2],
-      },
-      separator: {
-        type: "constant",
-        value: ";",
-      },
+      value: { type: "constant", value: 10 },
+    },
+    outputs: {
+      value: "value2",
     },
     dependsOn: [],
   },
-  log: {
+  loop: {
     node: "log::info",
-    outputs: {},
     inputs: {
-      value: {
+      value: { type: "constant", value: "Test" },
+    },
+    outputs: {},
+    dependsOn: [
+      {
+        nodeName: "check",
+        outputName: "result2",
+      },
+    ],
+  },
+  decrement_counter: {
+    node: "logic::subtract",
+    inputs: {
+      a: {
         type: "outputOf",
-        nodeName: "join",
-        outputName: "value",
+        nodeName: "counter",
+        outputName: "value2",
+      },
+      b: { type: "constant", value: 1 },
+    },
+    outputs: {
+      result: {
+        nodeName: "counter",
+        outputName: "value2",
       },
     },
-    dependsOn: ["join"],
+    dependsOn: ["loop"],
+  },
+  check: {
+    node: "logic::greaterThan",
+    inputs: {
+      a: {
+        type: "outputOf",
+        nodeName: "counter",
+        outputName: "value2",
+      },
+      b: { type: "constant", value: 0 },
+    },
+    outputs: {
+      result: "result2",
+    },
+    dependsOn: ["counter", "decrement_counter"],
   },
 };
 
