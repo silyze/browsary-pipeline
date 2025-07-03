@@ -50,7 +50,7 @@ export const genericNodeSchema = {
                 type: { type: "string", const: "constant" },
                 value: { $ref: "#/$defs/JsonValue" },
               },
-              required: ["type", "value"],
+              required: [],
               additionalProperties: false,
             },
             {
@@ -60,7 +60,7 @@ export const genericNodeSchema = {
                 nodeName: { type: "string" },
                 outputName: { type: "string" },
               },
-              required: ["type", "nodeName", "outputName"],
+              required: [],
               additionalProperties: false,
             },
           ],
@@ -78,7 +78,7 @@ export const genericNodeSchema = {
                 nodeName: { type: "string" },
                 outputName: { type: "string" },
               },
-              required: ["nodeName", "outputName"],
+              required: [],
               additionalProperties: false,
             },
           ],
@@ -94,7 +94,7 @@ export const genericNodeSchema = {
               nodeName: { type: "string" },
               outputName: { type: "string" },
             },
-            required: ["nodeName", "outputName"],
+            required: [],
             additionalProperties: false,
           },
           {
@@ -108,7 +108,7 @@ export const genericNodeSchema = {
                     nodeName: { type: "string" },
                     outputName: { type: "string" },
                   },
-                  required: ["nodeName", "outputName"],
+                  required: [],
                   additionalProperties: false,
                 },
               ],
@@ -117,7 +117,7 @@ export const genericNodeSchema = {
         ],
       },
     },
-    required: ["node", "inputs", "outputs", "dependsOn"],
+    required: [],
     additionalProperties: false,
   },
   $defs: {
@@ -140,4 +140,5 @@ export const genericNodeSchema = {
     },
   },
 } as const;
+
 export type PipelineSchema = JTDDataType<typeof genericNodeSchema>;
