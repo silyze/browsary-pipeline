@@ -19,7 +19,8 @@
     "prepare": "npm run build",
     "version": "git add -A lib",
     "postversion": "git push && git push --tags",
-    "start": "node dist/example.js"
+    "start": "node dist/example.js",
+    "test": "npm run build && node --test dist/tests/functions.test.js"
   },
   "publishConfig": {
     "access": "public"

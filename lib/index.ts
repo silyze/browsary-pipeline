@@ -9,6 +9,7 @@ import {
   InputNode,
   Pipeline,
   PipelineEvaluation,
+  PipelineEvaluationOptions,
   PipelineTreeNode,
   waitForPipelineThread,
 } from "./evaluation";
@@ -25,6 +26,17 @@ import {
   PipelineCompileResult,
   PipelineProvider,
 } from "./provider";
+import {
+  PipelineFunction,
+  PipelineFunctionDescriptor,
+  PipelineFunctionMetadata,
+  PipelineFunctionParameter,
+  PipelineFunctionProvider,
+  PipelineFunctionOutput,
+  PipelineFunctionOutputType,
+  PipelineFunctionResult,
+  MaybePromise,
+} from "./functions";
 import {
   booleanInputType,
   genericNodeSchema,
@@ -71,10 +83,22 @@ export type {
   EvaluationNodeContext,
   EvaluationLibrary,
   EvaluationConfig,
+  PipelineEvaluationOptions,
   PipelineTreeNode,
   IEvaluationPackage,
   PipelineCompileResult,
   PipelineCompileError,
   PipelineSchema,
   EvaluationNode,
+  PipelineFunction,
+  PipelineFunctionDescriptor,
+  PipelineFunctionMetadata,
+  PipelineFunctionParameter,
+  PipelineFunctionProvider,
+  PipelineFunctionOutput,
+  PipelineFunctionOutputType,
+  PipelineFunctionResult,
+  MaybePromise,
 };
+
+

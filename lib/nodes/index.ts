@@ -19,6 +19,7 @@ import EncodingPackage from "./EncodingPackage";
 import HttpPackage from "./HttpPackage";
 import CryptoPackage from "./CryptoPackage";
 import TaskPackage from "./TaskPackage";
+import FunctionsPackage from "./FunctionsPackage";
 
 export type { RefType };
 
@@ -41,7 +42,9 @@ const standard = [
   HttpPackage,
   CryptoPackage,
   TaskPackage,
+  FunctionsPackage,
 ];
 
 export const StandardLibraryProvider = createLibrary(...standard);
 export const standardLibrarySchema = inferLibrary(...standard);
+

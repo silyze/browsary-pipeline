@@ -4,6 +4,11 @@ import { Logger, createErrorObject } from "@silyze/logger";
 import { PipelineTreeJIT } from "./jit";
 import { EvaluationPackage } from "./library";
 import { AiProvider } from "@silyze/browsary-ai-provider";
+import {
+  PipelineFunction,
+  PipelineFunctionOutputType,
+  PipelineFunctionProvider,
+} from "./functions";
 
 export type InputNode =
   | { type: "outputOf"; nodeName: string; outputName: string }
@@ -32,6 +37,7 @@ export type EvaluationNodeContext = {
   gc: EvaluationGC;
   runtime: EvaluationRuntime;
   signal?: AbortSignal;
+  config: EvaluationConfig;
 };
 
 export type EvaluationNode = (
@@ -53,6 +59,7 @@ export type EvaluationConfig = {
   aiProvider: AiProvider<unknown, unknown>;
   libraryProvider: EvaluationLibraryProvider;
   viewport?: ViewportConfig;
+  functionProvider?: PipelineFunctionProvider;
 };
 
 export type PipelineTreeNode = {
@@ -62,6 +69,12 @@ export type PipelineTreeNode = {
   inputs: Record<string, InputNode>;
   outputs: Record<string, Output>;
   children: PipelineTreeNode[];
+};
+
+export type PipelineEvaluationOptions = {
+  arguments?: Record<string, unknown>;
+  functionProvider?: PipelineFunctionProvider;
+  functionDefinition?: PipelineFunction;
 };
 
 export interface BaseNodeEvent {
@@ -107,8 +120,11 @@ export class Pipeline {
     return this.#pipeline;
   }
 
-  createEvaluation(config: EvaluationConfig) {
-    return new PipelineEvaluation(this.#entrypoints, config);
+  createEvaluation(
+    config: EvaluationConfig,
+    options?: PipelineEvaluationOptions
+  ) {
+    return new PipelineEvaluation(this.#entrypoints, config, options);
   }
 
   public constructor(
@@ -144,7 +160,18 @@ export type EvaluationRuntime = {
     string,
     (inputs: Record<string, unknown>) => Promise<Record<string, unknown>>
   >;
+  arguments?: Record<string, unknown>;
+  functionProvider?: PipelineFunctionProvider;
+  functionDefinition?: PipelineFunction;
+  functionState?: FunctionRuntimeState;
   context: EvaluationNodeContext;
+};
+
+type FunctionRuntimeState = {
+  type: PipelineFunctionOutputType;
+  yields: unknown[];
+  returnValue?: unknown;
+  hasReturn?: boolean;
 };
 
 type PipelineThread = {
@@ -238,11 +265,23 @@ export class PipelineEvaluation {
   #logger: Logger;
   #library: EvaluationLibrary;
   #entrypoints: PipelineTreeNode[];
+  #config: EvaluationConfig;
+  #options: PipelineEvaluationOptions;
+  #functionProvider?: PipelineFunctionProvider;
+  #functionDefinition?: PipelineFunction;
 
-  constructor(entrypoints: PipelineTreeNode[], config: EvaluationConfig) {
+  constructor(
+    entrypoints: PipelineTreeNode[],
+    config: EvaluationConfig,
+    options: PipelineEvaluationOptions = {}
+  ) {
+    this.#config = config;
+    this.#options = options;
     this.#logger = config.logger.createScope("eval");
     this.#library = config.libraryProvider(config);
     this.#entrypoints = entrypoints;
+    this.#functionProvider = options.functionProvider ?? config.functionProvider;
+    this.#functionDefinition = options.functionDefinition;
 
     this.#logger.log(
       "debug",
@@ -299,6 +338,7 @@ export class PipelineEvaluation {
       signal,
       runtime: runtime as EvaluationRuntime,
       logger: this.#logger.createScope("runtime"),
+      config: this.#config,
     };
   }
 
@@ -310,6 +350,16 @@ export class PipelineEvaluation {
       state: {},
       outputs: {},
     };
+
+    runtime.arguments = this.#options.arguments;
+    runtime.functionProvider = this.#functionProvider;
+    runtime.functionDefinition = this.#functionDefinition;
+    if (this.#functionDefinition) {
+      runtime.functionState = {
+        type: this.#functionDefinition.outputType,
+        yields: [],
+      };
+    }
 
     const context = this.#createContext(gc, runtime, signal);
 

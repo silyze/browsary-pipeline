@@ -70,7 +70,7 @@ export function input<T extends EvaluationPackage<string>>(
       } else if (Array.isArray(descriptor)) {
         type = { enum: descriptor };
       } else if (descriptor === null) {
-        type = null!;
+        type = {};
       }
     }
 
