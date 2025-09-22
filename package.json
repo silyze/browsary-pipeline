@@ -10,6 +10,8 @@
   "type": "commonjs",
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "marked": "^16.3.0",
+    "pdfkit": "^0.13.0",
     "puppeteer-core": "^24.10.0",
     "typescript": "^5.8.3"
   },
@@ -20,7 +22,8 @@
     "version": "git add -A lib",
     "postversion": "git push && git push --tags",
     "start": "node dist/example.js",
-    "test": "npm run build && node --test dist/tests/functions.test.js"
+    "test": "npm run build && node --test dist/tests/functions.test.js",
+    "docs:pdf": "node scripts/generate-docs-pdf.js"
   },
   "publishConfig": {
     "access": "public"
