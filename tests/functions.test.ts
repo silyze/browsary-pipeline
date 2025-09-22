@@ -24,7 +24,12 @@ import {
 import type { Pipeline as PackagePipeline } from "@silyze/browsary-pipeline";
 
 class TestLogger extends Logger {
-  log<T>(severity: LogSeverity, _area: string, _message: string, _meta?: T): void {
+  log<T>(
+    severity: LogSeverity,
+    _area: string,
+    _message: string,
+    _meta?: T
+  ): void {
     if (severity === "fatal") {
       throw new Error("Fatal log emitted in test");
     }
@@ -36,7 +41,10 @@ class TestLogger extends Logger {
 }
 
 class TestModel extends AiModel<unknown> {
-  async prompt(_context: unknown, _messages: unknown[]): Promise<AiResult<string>> {
+  async prompt(
+    _context: unknown,
+    _messages: unknown[]
+  ): Promise<AiResult<string>> {
     throw new Error("Not implemented");
   }
 
@@ -144,7 +152,7 @@ test("functions::call resolves return values and flattens promises", async () =>
     returner: {
       node: "functions::return",
       inputs: {
-        value: { type: "constant", value: "Codex" },
+        value: { type: "constant", value: "Example" },
       },
       outputs: {
         value: "returned",
@@ -188,7 +196,7 @@ test("functions::call resolves return values and flattens promises", async () =>
     functionProvider: provider,
   });
 
-  assert.equal(runtime.outputs.call.callResult, "Codex");
+  assert.equal(runtime.outputs.call.callResult, "Example");
 });
 
 test("functions::call collects yielded iterator values", async () => {
@@ -328,7 +336,8 @@ test("functions::yield throws for function output type", async () => {
   });
 
   await assert.rejects(
-    () => executePipeline(pipeline, createConfig(), { functionProvider: provider }),
+    () =>
+      executePipeline(pipeline, createConfig(), { functionProvider: provider }),
     /can only be used when the function output type is 'iterator'/
   );
 });
@@ -373,7 +382,8 @@ test("functions::return throws for iterator output type", async () => {
   });
 
   await assert.rejects(
-    () => executePipeline(pipeline, createConfig(), { functionProvider: provider }),
+    () =>
+      executePipeline(pipeline, createConfig(), { functionProvider: provider }),
     /can only be used when the function output type is 'function'/
   );
 });
