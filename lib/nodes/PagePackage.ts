@@ -1,7 +1,7 @@
 import { EvaluationPackage, PackageName } from "../library";
 import { EvaluationNode } from "../evaluation";
 import { assert, assertType } from "@mojsoski/assert";
-import { title, description, input } from "../schema-base";
+import { title, description, input, output } from "../schema-base";
 import type { Page } from "puppeteer-core";
 
 export default class PagePackage extends EvaluationPackage<"page"> {
@@ -74,5 +74,68 @@ export default class PagePackage extends EvaluationPackage<"page"> {
 
     await (page as Page).type(selector, text, { delay: delayMs });
     return {};
+  };
+
+  @title("Get page content")
+  @description("Retrieve the current HTML markup of the page")
+  @input("page", "page")
+  @output("content", "string")
+  display: EvaluationNode = async ({ page }) => {
+    assert(page, `The "page" input parameter is null or undefined`);
+    const content = await (page as Page).content();
+    return { content };
+  };
+
+  @title("Evaluate expression")
+  @description("Execute a JavaScript expression in the page context and return the result")
+  @input("page", "page")
+  @input("expression", "string")
+  @output("result", "any")
+  evaluate: EvaluationNode = async ({ page, expression }) => {
+    assert(page, `The "page" input parameter is null or undefined`);
+    assertType(expression, "string", "expression");
+    const script = expression.trim();
+    assert(script.length > 0, `The "expression" input parameter cannot be empty`);
+
+    const result = await (page as Page).evaluate(script);
+    return { result };
+  };
+
+  @title("Wait for selector")
+  @description("Wait until a selector appears on the page within the provided timeout")
+  @input("page", "page")
+  @input("selector", "string")
+  @input("timeoutMs", "number")
+  @output("found", "boolean")
+  waitForSelector: EvaluationNode = async ({ page, selector, timeoutMs }) => {
+    assert(page, `The "page" input parameter is null or undefined`);
+    assertType(selector, "string", "selector");
+    assert(selector.trim().length > 0, `The "selector" input parameter cannot be empty`);
+    assertType(timeoutMs, "number", "timeoutMs");
+    assert(timeoutMs >= 0, `The "timeoutMs" input parameter must be greater than or equal to 0`);
+
+    try {
+      const handle = await (page as Page).waitForSelector(selector, {
+        timeout: timeoutMs,
+      });
+
+      if (handle) {
+        await handle.dispose();
+        return { found: true };
+      }
+
+      return { found: false };
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "name" in error &&
+        (error as Error).name === "TimeoutError"
+      ) {
+        return { found: false };
+      }
+
+      throw error;
+    }
   };
 }

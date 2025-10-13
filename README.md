@@ -228,11 +228,13 @@ Built-in node implementations available via `StandardLibraryProvider`:
 
 | Node                  | Description                               | Inputs                                                              | Outputs            |
 | --------------------- | ----------------------------------------- | ------------------------------------------------------------------- | ------------------ |
-| `browser::create`     | Launches a new browser instance           | _none_                                                              | `browser`          |
-| `browser::close`      | Closes an existing browser instance       | `browser`                                                           | _none_             |
-| `browser::createPage` | Opens a new page within a browser         | `browser`                                                           | `page`             |
-| `page::close`         | Closes an existing page instance          | `page`                                                              | _none_             |
-| `page::goto`          | Navigates a page to a specified URL       | `page`, `url` (string), `waitUntil?` (`load` \| `domcontentloaded`) | _none_             |
-| `page::click`         | Clicks an element matching a CSS selector | `page`, `selector` (string)                                         | _none_             |
-| `page::type`          | Types text into an input element          | `page`, `selector` (string), `text` (string)                        | _none_             |
-| `page::display`       | Retrieves the HTML content of the page    | `page`                                                              | `content` (string) |
+| `browser::create`        | Launches a new browser instance           | _none_                                                                                           | `browser`          |
+| `browser::close`         | Closes an existing browser instance       | `browser`                                                                                        | _none_             |
+| `browser::createPage`    | Opens a new page within a browser         | `browser`                                                                                        | `page`             |
+| `page::close`            | Closes an existing page instance          | `page`                                                                                           | _none_             |
+| `page::goto`             | Navigates a page to a specified URL       | `page`, `url` (string), `waitUntil` (`load` \| `domcontentloaded` \| `networkidle0` \| `networkidle2`) | _none_             |
+| `page::click`            | Clicks an element matching a CSS selector | `page`, `selector` (string), `waitForNavigation` (boolean)                                       | _none_             |
+| `page::type`             | Types text into an input element          | `page`, `selector` (string), `text` (string), `delayMs` (number)                                 | _none_             |
+| `page::display`          | Retrieves the HTML content of the page    | `page`                                                                                           | `content` (string) |
+| `page::evaluate`         | Executes a JavaScript expression on the page | `page`, `expression` (string)                                                                    | `result` (any)     |
+| `page::waitForSelector`  | Waits for a selector to appear within a timeout | `page`, `selector` (string), `timeoutMs` (number)                                                 | `found` (boolean)  |
