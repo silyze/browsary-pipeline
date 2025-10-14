@@ -21,7 +21,7 @@ Function calls resolve to a `PipelineFunctionResult`:
 - `{ "type": "function", "returnValue": Promise }` for single-value functions.
 - `{ "type": "iterator", "iterator": AsyncIterable }` for streaming functions.
 
-The `functions::call` node will flatten these structures into plain values (awaiting promises and collecting iterator items) before exposing them to the pipeline.
+The `functions::call` node will flatten these structures into plain values (awaiting promises and collecting iterator items) before exposing them to the pipeline as the `result` output, which may hold any JSON-serialisable value.
 
 ## Providers
 
@@ -41,7 +41,7 @@ Providers are typically backed by a registry or database that stores descriptors
    - For `"function"` outputType, `functions::return` can be used once to provide a return value.
    - For `"iterator"`, `functions::yield` appends items to the yield buffer.
 4. After evaluation finishes, declared outputs are collected using each `source` pointer. Any promises or async iterables produced by nodes are fully resolved.
-5. If the function declared zero outputs (or none named `result`), `functions::call` falls back to the flattened return/iterator result as `result`.
+5. If the function declared zero outputs (or none named `result`), `functions::call` falls back to the flattened return/iterator result as `result`. Any declared outputs are still surfaced alongside this value.
 
 The runtime also exposes `functions::arguments` and `functions::argument` so nested nodes can inspect input values without re-threading them through the graph.
 

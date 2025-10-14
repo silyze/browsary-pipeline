@@ -199,6 +199,68 @@ test("functions::call resolves return values and flattens promises", async () =>
   assert.equal(runtime.outputs.call.callResult, "Example");
 });
 
+test("functions::call result can feed typed string inputs", async () => {
+  const functionPipeline = compilePipeline({
+    returner: {
+      node: "functions::return",
+      inputs: {
+        value: { type: "constant", value: "Example" },
+      },
+      outputs: {
+        value: "returned",
+      },
+      dependsOn: [],
+    },
+  });
+
+  const functionDefinition: PipelineFunction = {
+    namespace: "examples",
+    name: "stringReturn",
+    metadata: { title: "String return" },
+    outputType: "function",
+    inputs: [],
+    outputs: [
+      {
+        name: "result",
+        refType: "string",
+        source: { nodeName: "returner", outputName: "returned" },
+      },
+    ],
+    pipeline: functionPipeline,
+  };
+
+  const provider = new InlineFunctionProvider([functionDefinition]);
+
+  const pipeline = compilePipeline({
+    call: {
+      node: "functions::call",
+      inputs: {
+        identifier: { type: "constant", value: "examples::stringReturn" },
+      },
+      outputs: {
+        result: "message",
+      },
+      dependsOn: [],
+    },
+    upper: {
+      node: "string::toUpperCase",
+      inputs: {
+        value: { type: "outputOf", nodeName: "call", outputName: "message" },
+      },
+      outputs: {
+        value: "uppercased",
+      },
+      dependsOn: ["call"],
+    },
+  });
+
+  const runtime = await executePipeline(pipeline, createConfig(), {
+    functionProvider: provider,
+  });
+
+  assert.equal(runtime.outputs.upper.uppercased, "EXAMPLE");
+});
+
 test("functions::call collects yielded iterator values", async () => {
   const functionPipeline = compilePipeline({
     first: {

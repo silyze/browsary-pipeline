@@ -142,7 +142,7 @@ export default class FunctionsPackage extends EvaluationPackage<"functions"> {
   @description("Invoke a reusable pipeline function by identifier")
   @input("identifier", "string")
   @input("args", "object")
-  @output("result", "object")
+  @output("result", "any")
   call: EvaluationNode = async ({ identifier, args }, context) => {
     assertType(identifier, "string", "identifier");
     const provider = ensureProvider(context.runtime.functionProvider);
