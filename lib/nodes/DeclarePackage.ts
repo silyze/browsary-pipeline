@@ -6,6 +6,15 @@ import { title, description, input, output } from "../schema-base";
 export default class DeclarePackage extends EvaluationPackage<"declare"> {
   readonly [PackageName] = "declare";
 
+  @title("Declare any")
+  @description("Declare a constant value of any type")
+  @input("value", "any")
+  @output("value", "any")
+  @inline("{ value: $value }")
+  any: EvaluationNode = async ({ value }) => {
+    return { value };
+  };
+
   @title("Declare number")
   @description("Declare a constant number value")
   @input("value", "number")

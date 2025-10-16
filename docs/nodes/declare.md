@@ -2,6 +2,14 @@
 
 - Convenience nodes for seeding constant values into a pipeline graph.
 
+### `declare::any` — Declare any
+- Description: Declare a constant value of any type
+- Inputs:
+  - `value` (any) – Value to expose without type enforcement.
+- Outputs:
+  - `value` (any) – The provided constant.
+- Notes: Passes the input through unchanged, allowing any type.
+
 ### `declare::number` — Declare number
 - Description: Declare a constant number value
 - Inputs:
