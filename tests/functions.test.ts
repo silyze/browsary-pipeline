@@ -16,10 +16,13 @@ import {
 import { Logger, LogSeverity } from "@silyze/logger";
 import { NullBrowserProvider } from "@silyze/browser-provider";
 import {
+  AiAgentConversationState,
   AiModel,
   AiProvider,
   AiResult,
   AnalysisResult,
+  ContinuePromptParams,
+  PromptParams,
 } from "@silyze/browsary-ai-provider";
 import type { Pipeline as PackagePipeline } from "@silyze/browsary-pipeline";
 
@@ -84,6 +87,18 @@ class TestAiProvider extends AiProvider<unknown, unknown> {
     _previousPipeline: Record<string, GenericNode>,
     _onMessages?: (message: unknown[]) => Promise<void> | void
   ): Promise<AiResult<PackagePipeline>> {
+    throw new Error("Not implemented");
+  }
+  async prompt(
+    _context: unknown,
+    _params: PromptParams
+  ): Promise<AiAgentConversationState> {
+    throw new Error("Not implemented");
+  }
+  async continuePrompt(
+    _context: unknown,
+    _params: ContinuePromptParams
+  ): Promise<AiAgentConversationState> {
     throw new Error("Not implemented");
   }
 }

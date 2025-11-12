@@ -1,6 +1,6 @@
 {
   "name": "@silyze/browsary-pipeline",
-  "version": "1.2.14",
+  "version": "1.2.15",
   "description": "The pipeline core library for Browsary",
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@mojsoski/assert": "^1.0.0",
-    "@silyze/browsary-ai-provider": "^1.1.0",
+    "@silyze/browsary-ai-provider": "^2.0.0",
     "@silyze/browser-provider": "^1.0.0",
     "@silyze/html-prompt-utils": "^1.0.0",
     "@silyze/logger": "^1.0.1",

@@ -8,10 +8,13 @@ import {
 } from "./lib";
 import { NullBrowserProvider } from "@silyze/browser-provider";
 import {
+  AiAgentConversationState,
   AiModel,
   AiProvider,
   AiResult,
   AnalysisResult,
+  ContinuePromptParams,
+  PromptParams,
 } from "@silyze/browsary-ai-provider";
 import type { Pipeline } from "@silyze/browsary-pipeline";
 const pipelineSource: Record<string, GenericNode> = {
@@ -111,6 +114,18 @@ class NullAiProvider extends AiProvider<unknown, unknown> {
     throw new Error("Method not implemented.");
   }
   generate(): Promise<AiResult<Pipeline>> {
+    throw new Error("Method not implemented.");
+  }
+  prompt(
+    _context: unknown,
+    _params: PromptParams
+  ): Promise<AiAgentConversationState> {
+    throw new Error("Method not implemented.");
+  }
+  continuePrompt(
+    _context: unknown,
+    _params: ContinuePromptParams
+  ): Promise<AiAgentConversationState> {
     throw new Error("Method not implemented.");
   }
 }
