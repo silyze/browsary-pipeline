@@ -21,6 +21,33 @@ import {
 
 const ajv = new Ajv();
 
+type PipelineNodeSchema =
+  (typeof pipelineSchema)["additionalProperties"]["anyOf"][number];
+type StandardNodeSchema = Extract<
+  PipelineNodeSchema,
+  { properties: { node: { const: string } } }
+>;
+
+function hasNodeConst(item: PipelineNodeSchema): item is StandardNodeSchema {
+  if (
+    typeof item !== "object" ||
+    item === null ||
+    !("properties" in item) ||
+    typeof item.properties !== "object" ||
+    item.properties === null ||
+    !("node" in item.properties)
+  ) {
+    return false;
+  }
+
+  const node = (item.properties as { node?: { const?: unknown } }).node;
+  return typeof node === "object" && node !== null && "const" in node;
+}
+
+const typedNodeSchemas = pipelineSchema.additionalProperties.anyOf.filter(
+  hasNodeConst
+) as StandardNodeSchema[];
+
 type AfterParseCheck =
   | {
       type: "depends-on";
@@ -154,9 +181,7 @@ function findUnreachable(
 }
 
 function schemaGetNode(node: `${string}::${string}`) {
-  return pipelineSchema.additionalProperties.anyOf.find(
-    (item) => item.properties.node.const === node
-  );
+  return typedNodeSchemas.find((item) => item.properties.node.const === node);
 }
 function resolveOutputReference(
   nodeName: string,
@@ -216,7 +241,7 @@ function describeType(type: string) {
   return `${type}&`;
 }
 
-export const nodes = pipelineSchema.additionalProperties.anyOf.map((item) => ({
+export const nodes = typedNodeSchemas.map((item) => ({
   title: item.title,
   description: item.description,
   node: item.properties.node.const,
