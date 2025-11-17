@@ -26,7 +26,8 @@ export {
 
 const GENERIC_NODE_SCHEMA_ID =
   "https://schemas.browsary.com/pipeline/generic-node";
-const ref = (name: string) => `${GENERIC_NODE_SCHEMA_ID}#/$defs/${name}`;
+// Use document-local references so schema validators don't treat them as remote.
+const ref = (name: string) => `#/$defs/${name}`;
 
 export const genericNodeSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
