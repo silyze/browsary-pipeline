@@ -1,4 +1,3 @@
-import { JTDDataType } from "ajv/dist/jtd";
 import {
   booleanInputType,
   numberType,
@@ -10,6 +9,7 @@ import {
   listType,
   objectType,
 } from "./schema-base";
+import type { GenericNode } from "./evaluation";
 import { standardLibrarySchema } from "./nodes";
 
 export {
@@ -24,20 +24,17 @@ export {
   objectType,
 };
 
-export const pipelineSchema = {
-  type: "object",
-  properties: {},
-  additionalProperties: {
-    anyOf: [...standardLibrarySchema],
-  },
-} as const;
+const GENERIC_NODE_SCHEMA_ID =
+  "https://schemas.browsary.com/pipeline/generic-node";
+const ref = (name: string) => `${GENERIC_NODE_SCHEMA_ID}#/$defs/${name}`;
+
 export const genericNodeSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  $id: "https://schemas.browsary.com/pipeline/generic-node",
+  $id: GENERIC_NODE_SCHEMA_ID,
   type: "object",
   properties: {},
   additionalProperties: {
-    $ref: "#/$defs/GenericNode",
+    $ref: ref("GenericNode"),
   },
   $defs: {
     JsonValue: {
@@ -48,11 +45,11 @@ export const genericNodeSchema = {
         { type: "null" },
         {
           type: "object",
-          additionalProperties: { $ref: "#/$defs/JsonValue" },
+          additionalProperties: { $ref: ref("JsonValue") },
         },
         {
           type: "array",
-          items: { $ref: "#/$defs/JsonValue" },
+          items: { $ref: ref("JsonValue") },
           additionalItems: false,
         },
       ],
@@ -63,7 +60,7 @@ export const genericNodeSchema = {
           type: "object",
           properties: {
             type: { type: "string", const: "constant" },
-            value: { $ref: "#/$defs/JsonValue" },
+            value: { $ref: ref("JsonValue") },
           },
           required: ["type", "value"],
           additionalProperties: false,
@@ -114,18 +111,18 @@ export const genericNodeSchema = {
         node: { type: "string", pattern: "^[^:]+::[^:]+$" },
         inputs: {
           type: "object",
-          additionalProperties: { $ref: "#/$defs/InputNode" },
+          additionalProperties: { $ref: ref("InputNode") },
         },
         outputs: {
           type: "object",
-          additionalProperties: { $ref: "#/$defs/Output" },
+          additionalProperties: { $ref: ref("Output") },
         },
         dependsOn: {
           anyOf: [
-            { $ref: "#/$defs/Dependency" },
+            { $ref: ref("Dependency") },
             {
               type: "array",
-              items: { $ref: "#/$defs/Dependency" },
+              items: { $ref: ref("Dependency") },
             },
           ],
         },
@@ -136,4 +133,12 @@ export const genericNodeSchema = {
   },
 } as const;
 
-export type PipelineSchema = JTDDataType<typeof genericNodeSchema>;
+export const pipelineSchema = {
+  type: "object",
+  properties: {},
+  additionalProperties: {
+    anyOf: [...standardLibrarySchema],
+  },
+} as const;
+
+export type PipelineSchema = Record<string, GenericNode>;
