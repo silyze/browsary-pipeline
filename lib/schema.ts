@@ -33,6 +33,7 @@ export const pipelineSchema = {
 } as const;
 export const genericNodeSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://schemas.browsary.com/pipeline/generic-node",
   type: "object",
   properties: {},
   additionalProperties: {
